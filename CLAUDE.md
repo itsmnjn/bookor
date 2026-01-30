@@ -29,6 +29,14 @@ src/
 - **Storage**: Browser localStorage (no database)
 - **Styling**: Plain CSS with CSS variables (no Tailwind)
 - **AI**: Google Generative AI SDK (`@google/genai`)
+- **EPUB Parsing**: JSZip for reading EPUB archives
+
+## Import Formats
+
+- **EPUB** (preferred): Extracts metadata from OPF, chapters from spine order
+- **TXT**: Detects chapters via regex patterns, strips Gutenberg boilerplate
+
+Smart paragraph grouping combines short consecutive paragraphs (dialogue) until reaching 250 char threshold.
 
 ## Views
 
@@ -47,6 +55,12 @@ The app has two main views managed by `App.tsx`:
 
 - `bun --hot src/index.ts` - Dev server with HMR
 - `bun run typecheck` - Type check
+- `railway up` - Deploy to Railway
+
+## Deployment
+
+Hosted on Railway (auto-detects Bun via bun.lock):
+- **URL**: https://bookor-production.up.railway.app
 
 ---
 

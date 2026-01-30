@@ -15,21 +15,36 @@ Functions:
 - `getCurrentProjectId()` / `setCurrentProjectId(id)` - Track last opened project
 
 ### parser.ts
-Plain text book parser that extracts structure from .txt files.
+Unified book parser with smart paragraph grouping.
 
-`parseTextFile(text, title, author)` returns a Project with:
-- Chapters detected via regex (Chapter X, Part X, roman numerals, ALL-CAPS lines)
-- Paragraphs split by empty lines
-- Default translation prompt included
+Entry point: `parseBookFile(file, title, author, prompt)` - auto-detects format by extension.
 
-Fallback: Creates single "Beginning" chapter if no chapter markers found.
+- `parseTextFile()` - TXT parser with chapter detection (Chapter X, Part X, roman numerals, ALL-CAPS)
+- `groupParagraphs()` - Combines short paragraphs until reaching 250 char threshold
+- Strips Gutenberg boilerplate automatically
+
+### epubParser.ts
+EPUB parser using JSZip + DOMParser.
+
+- `parseEpubFile(file, title, author, prompt)` - Full EPUB parsing
+- `extractEpubMetadata(file)` - Quick metadata extraction (no API key needed)
+
+EPUB structure: container.xml → content.opf → spine order → XHTML chapters
+
+### presets.ts
+Translation preset definitions.
+
+- `getAllPresets()` - Returns built-in translation presets
+- `getDefaultPreset()` - Returns the default preset
+
+Presets define translation style prompts (e.g., formal, casual, literary).
 
 ### gemini.ts
-Google Generative AI integration for translation.
+Google Generative AI integration for translation and metadata detection.
 
-`translateParagraph(apiKey, prompt, text)`:
-- Uses `gemini-2.5-flash` model
-- Combines custom prompt with paragraph text
-- Returns translated string
+- `initGemini(apiKey)` - Initialize the Gemini client
+- `isGeminiInitialized()` - Check if API key is configured
+- `translateParagraph(paragraph, prompt)` - Translate text using gemini-2.0-flash
+- `detectBookMetadata(sample)` - AI-powered title/author detection for TXT files
 
 API key is user-provided and stored in localStorage (not .env).
