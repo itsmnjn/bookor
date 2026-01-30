@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { downloadMarkdown } from "../lib/export"
 import { translateParagraph } from "../lib/gemini"
 import type { Chapter, Paragraph, ParagraphStatus, Project } from "../types/project"
-import { ArrowLeftIcon, CheckIcon, EyeIcon, EyeOffIcon, RefreshIcon, SettingsIcon } from "./Icons"
+import { ArrowLeftIcon, CheckIcon, DownloadIcon, EyeIcon, EyeOffIcon, RefreshIcon, SettingsIcon } from "./Icons"
 import { ProgressBar } from "./ProgressBar"
 
 interface EditorProps {
@@ -30,7 +31,7 @@ function getProjectProgress(project: Project) {
 
   for (const chapter of project.chapters) {
     for (const para of chapter.paragraphs) {
-      if (para.excluded) continue  // Skip excluded paragraphs
+      if (para.excluded) continue // Skip excluded paragraphs
       total++
       if (para.status === "translated") translated++
       if (para.status === "reviewed") reviewed++
@@ -132,6 +133,14 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
         </div>
 
         <div className="editor__actions">
+          <button
+            className="btn btn--ghost"
+            onClick={() => downloadMarkdown(project)}
+            aria-label="Export"
+            title="Export reviewed translations"
+          >
+            <DownloadIcon className="icon icon--lg" />
+          </button>
           <button className="btn btn--ghost" onClick={onOpenSettings} aria-label="Settings">
             <SettingsIcon className="icon icon--lg" />
           </button>
@@ -176,7 +185,9 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
                   return (
                     <article
                       key={paragraph.id}
-                      className={`paragraph-pair paragraph-pair--${paragraph.status}${paragraph.excluded ? ' paragraph-pair--excluded' : ''}`}
+                      className={`paragraph-pair paragraph-pair--${paragraph.status}${
+                        paragraph.excluded ? " paragraph-pair--excluded" : ""
+                      }`}
                     >
                       <div className="paragraph-pair__side paragraph-pair__side--original">
                         <div className="paragraph-pair__label">English</div>
@@ -194,7 +205,7 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
                               value={paragraph.translated}
                               onChange={(e) => handleTextChange(paragraph, e.target.value)}
                               placeholder="Translation will appear here..."
-                              rows={5}
+                              rows={10}
                             />
                           )
                           : (
@@ -208,14 +219,18 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
 
                         <div className="paragraph-pair__actions">
                           <div className="paragraph-pair__status-area">
-                            <span className={`status-badge status-badge--${paragraph.excluded ? 'excluded' : paragraph.status}`}>
-                              {paragraph.excluded ? 'excluded' : paragraph.status}
+                            <span
+                              className={`status-badge status-badge--${
+                                paragraph.excluded ? "excluded" : paragraph.status
+                              }`}
+                            >
+                              {paragraph.excluded ? "excluded" : paragraph.status}
                             </span>
                           </div>
 
                           <div className="paragraph-pair__action-buttons">
                             <button
-                              className={`btn btn--ghost btn--sm${paragraph.excluded ? ' btn--active' : ''}`}
+                              className={`btn btn--ghost btn--sm${paragraph.excluded ? " btn--active" : ""}`}
                               onClick={() => handleToggleExcluded(paragraph)}
                               title={paragraph.excluded ? "Include paragraph" : "Exclude paragraph"}
                             >

@@ -95,3 +95,11 @@ export function EyeIcon({ className = "" }: { className?: string }) {
     </svg>
   )
 }
+
+export function DownloadIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M8 2v8M5 7l3 3 3-3M2 10v3a1 1 0 001 1h10a1 1 0 001-1v-3" />
+    </svg>
+  )
+}
