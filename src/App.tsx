@@ -4,9 +4,9 @@ import { ImportModal } from "./components/ImportModal"
 import { ProjectList } from "./components/ProjectList"
 import { SettingsPanel } from "./components/SettingsPanel"
 import { initGemini } from "./lib/gemini"
-import { parseTextFile } from "./lib/parser"
-import { getCurrentProjectId, getProject, getProjectList, saveProject, setCurrentProjectId } from "./lib/storage"
-import type { Project, ProjectSummary } from "./types/project"
+import { parseBookFile } from "./lib/parser"
+import { deleteProject, getCurrentProjectId, getProject, getProjectList, saveProject, setCurrentProjectId } from "./lib/storage"
+import type { Project, ProjectSummary, TranslationPreset } from "./types/project"
 import "./index.css"
 
 type View = "list" | "editor"
@@ -48,6 +48,11 @@ export function App() {
     }
   }, [])
 
+  const handleDeleteProject = useCallback((id: string) => {
+    deleteProject(id)
+    setProjects(getProjectList())
+  }, [])
+
   const handleBackToList = useCallback(() => {
     setView("list")
     setCurrentProject(null)
@@ -55,17 +60,20 @@ export function App() {
     setProjects(getProjectList())
   }, [])
 
-  const handleImport = useCallback(async (file: File, title: string, author: string) => {
-    const text = await file.text()
-    const project = parseTextFile(text, title, author)
-    saveProject(project)
-    setProjects(getProjectList())
-    setShowImportModal(false)
+  const handleImport = useCallback(async (file: File, title: string, author: string, preset: TranslationPreset) => {
+    try {
+      const project = await parseBookFile(file, title, author, preset.prompt)
+      saveProject(project)
+      setProjects(getProjectList())
+      setShowImportModal(false)
 
-    // Open the new project
-    setCurrentProject(project)
-    setCurrentProjectId(project.id)
-    setView("editor")
+      // Open the new project
+      setCurrentProject(project)
+      setCurrentProjectId(project.id)
+      setView("editor")
+    } catch (error) {
+      console.error("Failed to import book:", error)
+    }
   }, [])
 
   const handleUpdateProject = useCallback((project: Project) => {
@@ -87,7 +95,9 @@ export function App() {
         <ProjectList
           projects={projects}
           onSelectProject={handleSelectProject}
+          onDeleteProject={handleDeleteProject}
           onNewProject={() => setShowImportModal(true)}
+          onOpenSettings={() => setShowSettings(true)}
         />
       )}
 
@@ -107,10 +117,10 @@ export function App() {
         />
       )}
 
-      {showSettings && currentProject && (
+      {showSettings && (
         <SettingsPanel
-          translationPrompt={currentProject.translationPrompt}
-          onUpdatePrompt={handleUpdatePrompt}
+          translationPrompt={currentProject?.translationPrompt}
+          onUpdatePrompt={currentProject ? handleUpdatePrompt : undefined}
           onClose={() => setShowSettings(false)}
         />
       )}

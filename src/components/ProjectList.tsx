@@ -1,11 +1,14 @@
+import { isGeminiInitialized } from "../lib/gemini"
 import type { ProjectSummary } from "../types/project"
-import { PlusIcon } from "./Icons"
+import { PlusIcon, SettingsIcon, TrashIcon } from "./Icons"
 import { ProgressBar } from "./ProgressBar"
 
 interface ProjectListProps {
   projects: ProjectSummary[]
   onSelectProject: (id: string) => void
+  onDeleteProject: (id: string) => void
   onNewProject: () => void
+  onOpenSettings: () => void
 }
 
 function formatDate(timestamp: number): string {
@@ -25,7 +28,9 @@ function formatDate(timestamp: number): string {
   })
 }
 
-export function ProjectList({ projects, onSelectProject, onNewProject }: ProjectListProps) {
+export function ProjectList({ projects, onSelectProject, onDeleteProject, onNewProject, onOpenSettings }: ProjectListProps) {
+  const isConnected = isGeminiInitialized()
+
   return (
     <div className="project-list">
       <header className="project-list__header">
@@ -33,11 +38,29 @@ export function ProjectList({ projects, onSelectProject, onNewProject }: Project
           <h1 className="project-list__title">bookor</h1>
           <p className="project-list__subtitle">Book translation workspace</p>
         </div>
-        <button className="btn btn--primary" onClick={onNewProject}>
-          <PlusIcon className="icon" />
-          New Project
-        </button>
+        <div className="project-list__actions">
+          <button className="btn btn--ghost" onClick={onOpenSettings} aria-label="Settings">
+            <SettingsIcon className="icon" />
+          </button>
+          <button className="btn btn--primary" onClick={onNewProject}>
+            <PlusIcon className="icon" />
+            New Project
+          </button>
+        </div>
       </header>
+
+      {!isConnected && (
+        <div className="api-key-banner" onClick={onOpenSettings}>
+          <div className="api-key-banner__content">
+            <div className="api-key-banner__icon">!</div>
+            <div>
+              <strong>Gemini API key required</strong>
+              <p>Add your API key to enable AI-powered translations and auto-detection.</p>
+            </div>
+          </div>
+          <button className="btn btn--primary btn--sm">Set up API key</button>
+        </div>
+      )}
 
       {projects.length === 0
         ? (
@@ -59,9 +82,23 @@ export function ProjectList({ projects, onSelectProject, onNewProject }: Project
                     <h2 className="project-card__title">{project.title}</h2>
                     <p className="project-card__author">{project.author}</p>
                   </div>
-                  <span className="project-card__meta">
-                    {formatDate(project.updatedAt)}
-                  </span>
+                  <div className="project-card__actions">
+                    <span className="project-card__meta">
+                      {formatDate(project.updatedAt)}
+                    </span>
+                    <button
+                      className="btn btn--ghost btn--sm project-card__delete"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (confirm(`Delete "${project.title}"?`)) {
+                          onDeleteProject(project.id)
+                        }
+                      }}
+                      aria-label="Delete project"
+                    >
+                      <TrashIcon className="icon" />
+                    </button>
+                  </div>
                 </div>
                 <div className="project-card__footer">
                   <div className="project-card__progress">

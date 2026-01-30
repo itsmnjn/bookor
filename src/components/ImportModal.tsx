@@ -1,11 +1,15 @@
 import { type ChangeEvent, type DragEvent, useCallback, useState } from "react"
+import { extractEpubMetadata } from "../lib/epubParser"
+import { detectBookMetadata, isGeminiInitialized } from "../lib/gemini"
+import { getAllPresets, getDefaultPreset } from "../lib/presets"
+import type { TranslationPreset } from "../types/project"
 import { CloseIcon, FileIcon, UploadIcon } from "./Icons"
 
 type ImportMode = "upload" | "url"
 
 interface ImportModalProps {
   onClose: () => void
-  onImport: (file: File, title: string, author: string) => void
+  onImport: (file: File, title: string, author: string, preset: TranslationPreset) => void
 }
 
 export function ImportModal({ onClose, onImport }: ImportModalProps) {
@@ -18,6 +22,10 @@ export function ImportModal({ onClose, onImport }: ImportModalProps) {
   const [isFetching, setIsFetching] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [fetchedFromUrl, setFetchedFromUrl] = useState(false)
+  const [presets] = useState<TranslationPreset[]>(getAllPresets())
+  const [selectedPresetId, setSelectedPresetId] = useState(getDefaultPreset().id)
+  const [isDetecting, setIsDetecting] = useState(false)
+  const [detectError, setDetectError] = useState<string | null>(null)
 
   const handleDragOver = useCallback((e: DragEvent) => {
     e.preventDefault()
@@ -34,11 +42,14 @@ export function ImportModal({ onClose, onImport }: ImportModalProps) {
     setIsDragging(false)
 
     const droppedFile = e.dataTransfer.files[0]
-    if (droppedFile && droppedFile.type === "text/plain") {
-      setFile(droppedFile)
-      // Try to extract title from filename
-      const nameWithoutExt = droppedFile.name.replace(/\.txt$/, "")
-      if (!title) setTitle(nameWithoutExt)
+    if (droppedFile) {
+      const ext = droppedFile.name.toLowerCase().split(".").pop()
+      if (ext === "epub" || ext === "txt" || droppedFile.type === "text/plain") {
+        setFile(droppedFile)
+        // Try to extract title from filename
+        const nameWithoutExt = droppedFile.name.replace(/\.(epub|txt)$/i, "")
+        if (!title) setTitle(nameWithoutExt)
+      }
     }
   }, [title])
 
@@ -46,7 +57,7 @@ export function ImportModal({ onClose, onImport }: ImportModalProps) {
     const selectedFile = e.target.files?.[0]
     if (selectedFile) {
       setFile(selectedFile)
-      const nameWithoutExt = selectedFile.name.replace(/\.txt$/, "")
+      const nameWithoutExt = selectedFile.name.replace(/\.(epub|txt)$/i, "")
       if (!title) setTitle(nameWithoutExt)
     }
   }, [title])
@@ -84,9 +95,47 @@ export function ImportModal({ onClose, onImport }: ImportModalProps) {
     }
   }, [gutenbergUrl, title])
 
+  const handleDetectMetadata = useCallback(async () => {
+    if (!file) return
+
+    const ext = file.name.toLowerCase().split(".").pop()
+
+    setIsDetecting(true)
+    setDetectError(null)
+
+    try {
+      if (ext === "epub") {
+        // EPUB: extract metadata directly from OPF
+        const metadata = await extractEpubMetadata(file)
+        if (metadata.title !== "Unknown") setTitle(metadata.title)
+        if (metadata.author !== "Unknown") setAuthor(metadata.author)
+      } else {
+        // TXT: use Gemini AI detection
+        if (!isGeminiInitialized()) {
+          setDetectError("Please set your Gemini API key in Settings first")
+          return
+        }
+
+        const text = await file.text()
+        // Get first ~100 lines (or ~4000 chars, whichever is smaller)
+        const lines = text.split(/\r?\n/).slice(0, 100)
+        const sample = lines.join("\n").slice(0, 4000)
+
+        const metadata = await detectBookMetadata(sample)
+        if (metadata.title !== "Unknown") setTitle(metadata.title)
+        if (metadata.author !== "Unknown") setAuthor(metadata.author)
+      }
+    } catch (err) {
+      setDetectError(err instanceof Error ? err.message : "Failed to detect metadata")
+    } finally {
+      setIsDetecting(false)
+    }
+  }, [file])
+
   const handleSubmit = () => {
     if (file && title.trim()) {
-      onImport(file, title.trim(), author.trim() || "Unknown")
+      const selectedPreset = presets.find((p) => p.id === selectedPresetId) || getDefaultPreset()
+      onImport(file, title.trim(), author.trim() || "Unknown", selectedPreset)
     }
   }
 
@@ -132,7 +181,7 @@ export function ImportModal({ onClose, onImport }: ImportModalProps) {
                 <input
                   id="file-input"
                   type="file"
-                  accept=".txt"
+                  accept=".epub,.txt"
                   onChange={handleFileChange}
                   style={{ display: "none" }}
                 />
@@ -148,8 +197,8 @@ export function ImportModal({ onClose, onImport }: ImportModalProps) {
                       <div className="dropzone__icon">
                         <UploadIcon className="icon icon--lg" />
                       </div>
-                      <p className="dropzone__text">Drop a .txt file or click to browse</p>
-                      <p className="dropzone__hint">Plain text files from Project Gutenberg work great</p>
+                      <p className="dropzone__text">Drop an .epub or .txt file</p>
+                      <p className="dropzone__hint">EPUB recommended for best chapter detection</p>
                     </>
                   )}
               </div>
@@ -187,7 +236,19 @@ export function ImportModal({ onClose, onImport }: ImportModalProps) {
           </div>
 
           <div className="form-group">
-            <label className="form-label" htmlFor="title">Title</label>
+            <div className="form-label-row">
+              <label className="form-label" htmlFor="title">Title & Author</label>
+              {file && (
+                <button
+                  className="btn btn--sm btn--secondary"
+                  onClick={handleDetectMetadata}
+                  disabled={isDetecting}
+                >
+                  {isDetecting ? <span className="spinner" /> : "Auto-detect"}
+                </button>
+              )}
+            </div>
+            {detectError && <p className="detect-error">{detectError}</p>}
             <input
               id="title"
               type="text"
@@ -196,10 +257,6 @@ export function ImportModal({ onClose, onImport }: ImportModalProps) {
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g., Demian"
             />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="author">Author</label>
             <input
               id="author"
               type="text"
@@ -207,7 +264,24 @@ export function ImportModal({ onClose, onImport }: ImportModalProps) {
               value={author}
               onChange={(e) => setAuthor(e.target.value)}
               placeholder="e.g., Hermann Hesse"
+              style={{ marginTop: "var(--space-sm)" }}
             />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Translation Preset</label>
+            <div className="preset-selector preset-selector--compact">
+              {presets.map((preset) => (
+                <button
+                  key={preset.id}
+                  className={`preset-btn ${selectedPresetId === preset.id ? "preset-btn--active" : ""}`}
+                  onClick={() => setSelectedPresetId(preset.id)}
+                >
+                  <span className="preset-btn__name">{preset.name}</span>
+                </button>
+              ))}
+            </div>
+            <p className="form-hint">Choose how text will be translated in this project</p>
           </div>
         </div>
 

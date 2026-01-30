@@ -61,6 +61,7 @@ function projectToSummary(project: Project): ProjectSummary {
 
   for (const chapter of project.chapters) {
     for (const para of chapter.paragraphs) {
+      if (para.excluded) continue  // Skip excluded paragraphs
       total++
       if (para.status === "translated") translated++
       if (para.status === "reviewed") reviewed++

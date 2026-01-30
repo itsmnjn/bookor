@@ -66,3 +66,32 @@ export function RefreshIcon({ className = "" }: { className?: string }) {
     </svg>
   )
 }
+
+export function TrashIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M2 4h12M5.5 4V2.5a1 1 0 011-1h3a1 1 0 011 1V4M6 7v5M10 7v5" />
+      <path d="M3 4l1 10a1 1 0 001 1h6a1 1 0 001-1l1-10" />
+    </svg>
+  )
+}
+
+export function EyeOffIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M2 2l12 12" />
+      <path d="M6.5 6.5a2 2 0 002.8 2.8" />
+      <path d="M4.2 4.2C2.8 5.2 1.5 6.5 1 8c1 3 3.5 5 7 5 1.2 0 2.3-.3 3.3-.7" />
+      <path d="M8 3c3.5 0 6 2 7 5-.3.8-.8 1.6-1.4 2.3" />
+    </svg>
+  )
+}
+
+export function EyeIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <circle cx="8" cy="8" r="2" />
+      <path d="M1 8c1-3 3.5-5 7-5s6 2 7 5c-1 3-3.5 5-7 5s-6-2-7-5z" />
+    </svg>
+  )
+}

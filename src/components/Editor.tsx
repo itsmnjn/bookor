@@ -1,7 +1,7 @@
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { translateParagraph } from "../lib/gemini"
 import type { Chapter, Paragraph, ParagraphStatus, Project } from "../types/project"
-import { ArrowLeftIcon, CheckIcon, RefreshIcon, SettingsIcon } from "./Icons"
+import { ArrowLeftIcon, CheckIcon, EyeIcon, EyeOffIcon, RefreshIcon, SettingsIcon } from "./Icons"
 import { ProgressBar } from "./ProgressBar"
 
 interface EditorProps {
@@ -30,6 +30,7 @@ function getProjectProgress(project: Project) {
 
   for (const chapter of project.chapters) {
     for (const para of chapter.paragraphs) {
+      if (para.excluded) continue  // Skip excluded paragraphs
       total++
       if (para.status === "translated") translated++
       if (para.status === "reviewed") reviewed++
@@ -42,9 +43,15 @@ function getProjectProgress(project: Project) {
 export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: EditorProps) {
   const [activeChapterId, setActiveChapterId] = useState(project.chapters[0]?.id || "")
   const [translatingIds, setTranslatingIds] = useState<Set<string>>(new Set())
+  const contentRef = useRef<HTMLElement>(null)
 
   const activeChapter = project.chapters.find(ch => ch.id === activeChapterId)
   const progress = getProjectProgress(project)
+
+  // Scroll to top when chapter changes
+  useEffect(() => {
+    contentRef.current?.scrollTo(0, 0)
+  }, [activeChapterId])
 
   const updateParagraph = useCallback((chapterId: string, paragraphId: string, updates: Partial<Paragraph>) => {
     const newChapters = project.chapters.map(ch => {
@@ -97,6 +104,11 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
     updateParagraph(activeChapter.id, paragraph.id, { translated: text })
   }, [activeChapter, updateParagraph])
 
+  const handleToggleExcluded = useCallback((paragraph: Paragraph) => {
+    if (!activeChapter) return
+    updateParagraph(activeChapter.id, paragraph.id, { excluded: !paragraph.excluded })
+  }, [activeChapter, updateParagraph])
+
   return (
     <div className="editor">
       <header className="editor__topbar">
@@ -146,7 +158,7 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
         </div>
       </aside>
 
-      <main className="editor__content">
+      <main className="editor__content" ref={contentRef}>
         {activeChapter
           ? (
             <>
@@ -164,7 +176,7 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
                   return (
                     <article
                       key={paragraph.id}
-                      className={`paragraph-pair paragraph-pair--${paragraph.status}`}
+                      className={`paragraph-pair paragraph-pair--${paragraph.status}${paragraph.excluded ? ' paragraph-pair--excluded' : ''}`}
                     >
                       <div className="paragraph-pair__side paragraph-pair__side--original">
                         <div className="paragraph-pair__label">English</div>
@@ -195,11 +207,20 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
                           )}
 
                         <div className="paragraph-pair__actions">
-                          <span className={`status-badge status-badge--${paragraph.status}`}>
-                            {paragraph.status}
-                          </span>
+                          <div className="paragraph-pair__status-area">
+                            <span className={`status-badge status-badge--${paragraph.excluded ? 'excluded' : paragraph.status}`}>
+                              {paragraph.excluded ? 'excluded' : paragraph.status}
+                            </span>
+                          </div>
 
                           <div className="paragraph-pair__action-buttons">
+                            <button
+                              className={`btn btn--ghost btn--sm${paragraph.excluded ? ' btn--active' : ''}`}
+                              onClick={() => handleToggleExcluded(paragraph)}
+                              title={paragraph.excluded ? "Include paragraph" : "Exclude paragraph"}
+                            >
+                              {paragraph.excluded ? <EyeIcon className="icon" /> : <EyeOffIcon className="icon" />}
+                            </button>
                             <button
                               className="btn btn--secondary btn--sm"
                               onClick={() => handleTranslate(paragraph)}

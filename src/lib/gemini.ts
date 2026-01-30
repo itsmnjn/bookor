@@ -71,3 +71,50 @@ export async function translateBatch(
 
   return results
 }
+
+export interface BookMetadata {
+  title: string
+  author: string
+}
+
+export async function detectBookMetadata(textSample: string): Promise<BookMetadata> {
+  if (!client) {
+    throw new Error("Gemini not initialized. Please set your API key.")
+  }
+
+  const prompt = `Analyze the following text from the beginning of a book and extract the title and author.
+Return ONLY a JSON object in this exact format, with no additional text or markdown:
+{"title": "Book Title", "author": "Author Name"}
+
+If you cannot determine the title or author, use "Unknown" for that field.
+
+Text:
+${textSample}`
+
+  const result = await client.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: prompt,
+    config: {
+      temperature: 0.1,
+      maxOutputTokens: 256,
+    },
+  })
+
+  const responseText = result.text || ""
+
+  try {
+    // Try to extract JSON from the response
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/)
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0])
+      return {
+        title: parsed.title || "Unknown",
+        author: parsed.author || "Unknown",
+      }
+    }
+  } catch (e) {
+    console.error("Failed to parse metadata response:", responseText)
+  }
+
+  return { title: "Unknown", author: "Unknown" }
+}

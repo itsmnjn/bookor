@@ -1,10 +1,18 @@
 export type ParagraphStatus = "pending" | "translated" | "reviewed"
 
+export interface TranslationPreset {
+  id: string
+  name: string
+  prompt: string
+  isBuiltIn: boolean  // true for defaults, false for user-created
+}
+
 export interface Paragraph {
   id: string
   original: string
   translated: string
   status: ParagraphStatus
+  excluded?: boolean  // Exclude from final output and progress calculations
 }
 
 export interface Chapter {
