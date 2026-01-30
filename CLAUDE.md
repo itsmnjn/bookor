@@ -4,6 +4,54 @@ globs: "*.ts, *.tsx, *.html, *.css, *.js, *.jsx, package.json"
 alwaysApply: false
 ---
 
+# Bookor
+
+A book translation workspace for importing books and translating them paragraph-by-paragraph using Google Gemini.
+
+## Project Structure
+
+```
+src/
+├── index.ts          # Bun.serve() entry point
+├── index.html        # HTML template
+├── frontend.tsx      # React root
+├── App.tsx           # Main app orchestrator
+├── index.css         # Global styles + CSS variables
+├── components/       # React components (see src/components/CLAUDE.md)
+├── lib/              # Utilities (see src/lib/CLAUDE.md)
+└── types/            # TypeScript types (see src/types/CLAUDE.md)
+```
+
+## Architecture
+
+- **Backend**: Bun.serve() with route-based API (no Express)
+- **Frontend**: React 19 with functional components and hooks
+- **Storage**: Browser localStorage (no database)
+- **Styling**: Plain CSS with CSS variables (no Tailwind)
+- **AI**: Google Generative AI SDK (`@google/genai`)
+
+## Views
+
+The app has two main views managed by `App.tsx`:
+- **ProjectList** (`view="list"`): Browse and select projects
+- **Editor** (`view="editor"`): Translate paragraphs in selected project
+
+## API Routes
+
+| Route | Purpose |
+|-------|---------|
+| `/*` | Serves SPA (index.html) |
+| `/api/fetch-gutenberg?url=` | Fetches book text from Project Gutenberg |
+
+## Commands
+
+- `bun --hot src/index.ts` - Dev server with HMR
+- `bun run typecheck` - Type check
+
+---
+
+# Bun Guidelines
+
 Default to using Bun instead of Node.js.
 
 - Use `bun <file>` instead of `node <file>` or `ts-node <file>`
