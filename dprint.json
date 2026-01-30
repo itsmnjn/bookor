@@ -1,0 +1,16 @@
+{
+  "typescript": {
+    "quoteStyle": "preferDouble",
+    "semiColons": "asi",
+    "trailingCommas": "onlyMultiLine",
+    "useTabs": false,
+    "indentWidth": 2
+  },
+  "json": {},
+  "includes": ["**/*.{ts,tsx,js,jsx,json}"],
+  "excludes": ["**/node_modules", "**/dist", "**/build", "bun.lock"],
+  "plugins": [
+    "https://plugins.dprint.dev/typescript-0.93.3.wasm",
+    "https://plugins.dprint.dev/json-0.19.4.wasm"
+  ]
+}
