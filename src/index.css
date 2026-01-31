@@ -698,6 +698,47 @@ body::before {
   gap: var(--space-sm);
 }
 
+/* Export menu popover */
+.export-menu-container {
+  position: relative;
+}
+
+.export-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: var(--space-xs);
+  min-width: 180px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(42, 38, 35, 0.12);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.export-menu__item {
+  display: block;
+  width: 100%;
+  padding: var(--space-sm) var(--space-md);
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: var(--text-sm, 0.875rem);
+  color: var(--text-primary);
+  transition: background var(--transition-fast);
+}
+
+.export-menu__item:hover {
+  background: var(--bg-secondary);
+}
+
+.export-menu__item:not(:last-child) {
+  border-bottom: 1px solid var(--border-light);
+}
+
 /* Sidebar */
 .sidebar {
   background: var(--bg-secondary);

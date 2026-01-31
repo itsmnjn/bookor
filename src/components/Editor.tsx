@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { downloadMarkdown } from "../lib/export"
+import { downloadMarkdown, downloadPdf } from "../lib/export"
 import { translateParagraph } from "../lib/gemini"
 import type { Chapter, Paragraph, ParagraphStatus, Project } from "../types/project"
 import { ArrowLeftIcon, CheckIcon, DownloadIcon, EyeIcon, EyeOffIcon, RefreshIcon, SettingsIcon } from "./Icons"
@@ -44,7 +44,9 @@ function getProjectProgress(project: Project) {
 export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: EditorProps) {
   const [activeChapterId, setActiveChapterId] = useState(project.chapters[0]?.id || "")
   const [translatingIds, setTranslatingIds] = useState<Set<string>>(new Set())
+  const [showExportMenu, setShowExportMenu] = useState(false)
   const contentRef = useRef<HTMLElement>(null)
+  const exportMenuRef = useRef<HTMLDivElement>(null)
 
   const activeChapter = project.chapters.find(ch => ch.id === activeChapterId)
   const progress = getProjectProgress(project)
@@ -53,6 +55,19 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
   useEffect(() => {
     contentRef.current?.scrollTo(0, 0)
   }, [activeChapterId])
+
+  // Close export menu on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false)
+      }
+    }
+    if (showExportMenu) {
+      document.addEventListener("mousedown", handleClickOutside)
+      return () => document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [showExportMenu])
 
   const updateParagraph = useCallback((chapterId: string, paragraphId: string, updates: Partial<Paragraph>) => {
     const newChapters = project.chapters.map(ch => {
@@ -133,14 +148,39 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
         </div>
 
         <div className="editor__actions">
-          <button
-            className="btn btn--ghost"
-            onClick={() => downloadMarkdown(project)}
-            aria-label="Export"
-            title="Export reviewed translations"
-          >
-            <DownloadIcon className="icon icon--lg" />
-          </button>
+          <div className="export-menu-container" ref={exportMenuRef}>
+            <button
+              className="btn btn--ghost"
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              aria-label="Export"
+              title="Export reviewed translations"
+            >
+              <DownloadIcon className="icon icon--lg" />
+            </button>
+
+            {showExportMenu && (
+              <div className="export-menu">
+                <button
+                  className="export-menu__item"
+                  onClick={() => {
+                    downloadMarkdown(project)
+                    setShowExportMenu(false)
+                  }}
+                >
+                  Export as Markdown
+                </button>
+                <button
+                  className="export-menu__item"
+                  onClick={() => {
+                    downloadPdf(project)
+                    setShowExportMenu(false)
+                  }}
+                >
+                  Export as PDF
+                </button>
+              </div>
+            )}
+          </div>
           <button className="btn btn--ghost" onClick={onOpenSettings} aria-label="Settings">
             <SettingsIcon className="icon icon--lg" />
           </button>
