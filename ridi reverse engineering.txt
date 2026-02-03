@@ -1,0 +1,532 @@
+﻿I have been learning Korean and have found that one of the best ways to improve vocabulary and build a familiarity with the language is by reading books. Unfortunately, the selection of Korean books on platforms like Amazon, Google Play Books, and other popular retailers is understandably lackluster.
+
+
+That is why I’ve been using Korean eBook providers to buy and read my books. However, I have found it quite restrictive. While I would like to read my eBooks in an the app of my choice, or on my kindle eBook reader, in order to do this I need the actual file of the book (usually .epub format).
+
+
+This is what the application we will be talking about this blog post looks like:
+
+
+
+
+The Korean eBook application
+I really wanted to find the actual epub files for these books, so I decided to go digging through the eBook reader’s application data for where it stores the books on disc.
+
+
+Since I’m using Windows (actually wine on Linux, but for our purposes there’s no difference), I expect the application data to be at C:/users/john/AppData . Indeed, we find a directory C:/users/john/AppData/Roaming/<app-name>/library/<username> which seems to contain our downloaded books!
+
+
+
+
+Contents of C:/users/john/AppData/Roaming/<app-name>/library/<username> folder
+There’s some bad news here. The names are not very helpful in determining which book is which, and the purpose of the .dat file is a bit mysterious. However, we also have some good news!
+
+
+After a quick google search, we see that the META-INF , mimetype , OEBPS folders are part of the epub specification. Let’s try opening up one of the xhtml files that makes up the book.
+
+
+ls 4699000001/content/OEBPS/Text/
+
+
+author.xhtml  index.xhtml  p03.xhtml       Section0000.xhtml  Section0003.xhtml  title.xhtml
+copy.xhtml    p01.xhtml    prologue.xhtml  Section0001.xhtml  Section0004.xhtml  writer.xhtml
+cover.xhtml   p02.xhtml    refer.xhtml     Section0002.xhtml  title2.xhtml
+
+
+cat index.html
+
+
+y‹ú‡¸âôÀQÒÙ€Â!)ÙØŠFb·1IÔ88©áO@ { `*§Fbx¬fÅ¶jSŠßþYwAj­‘IA”­RXú’µö[¥>Ì”|
+M#“ý¦G!­pMÖ ÛiÄYÏÆ ÎÁyøÅ»ÚhXsBf.ŒœðåëCOiÀ05;_È&€ý¼+¾ÄéŸ*š6~[Îý¤• †]ÞŽŸî
+!7@«ó¯*›|ðšõòýVj%&8æEŽ¡ë)f÷W{BÃ¶×³Ãõœ Ëc|)XÅð U^Tàz ñ[IÝ~ &²We\ÉÎ3TFçR?ú
+ a31J:ÈÛ „•}ß?Áò¤›-œ£|&¿ÙŸ¯/6ðâþÐ†Ôjú#-&˜®¿©[ñyÿBÜçöhÈËäÃº3äDqŸh|E!<£@$
+"£@= |tÜ›J"ÜÞFM8Í¡{L­©ºÈ)ã×\0öøn1Q"Êô‡™D> ±ÒÊ\fºÏ7 ‚tk/FJé mÿDž¾N)V7ä¹
+aåg+ÕœÓÂ¡¹$&FJ5–_2r ƒ„Î5B›Iziƒâ…Ž6ÛmÓÆ¨Ó¾?G´T®®¶L}ÑŒ“Aîïé¨…m=ÎÉë$oh&J
+”áí)a?¬:ùèâ(ÏÍ¦lÍaCCèxæu-qo¶UáºI|RµjgŸöN0Éä†©ŸÑæXa) Xl?8æ¶Œ—ÚiåXœ¬ €|×
+ Rwn`ru==R™ZÓ¼ë&‚Î÷h‰e¬B²ùÕsOV_[*Ý6j—|Ï/,a²¬2æ.¡ó”<ýÜÚ (O¬ÎÞ%J’ª¶ Ç7B‰È
+_=„$dn­[À…ÞA×tIˆá!ð2î±rc¦š4ØDL¶‰ø¬å3{4ÖŠqu^MÉNSÕùï%sÏGì™?‹égÆ@¤>x¸(™VcŒÃã
+ó²6o%–õ’¤†ÔÆ”0ø2èwJ.¬âÂ Ï| ÒÏ¶sÙ.êåöÛ–ÑgQûÄñ‚ÙÍýÐg1)1aŸ@–,rQ'N”&óž;#jÏœ¬
+þ#¹!’O^2N{¥Lwµž“=OûªDSì†°•® AÑsãœÑ’L.Að+ò(‡ˆˆÒ¹¦æ™MW™ÅkzýÀ‘â„¯Õ"÷£pÔ¥Z°
+ïû‚Ÿá2.D™s{  Ç_¨J ã€Ý p}Ò>à<Z Í¾Wz‹_4¿}³?[¼J 'j´ DÎ¼E¹¸§ÁQ68N´Y4ÉWpl‚ÉB
+Ìº:º¥^õáeZ¸d²­ŠeÃë°ÞP“œf¡H‰YÆgs±˜5¾ƒÁ¸K%Ú—DeÙ°L¤+¢OØ>tö×}òãÙ>IŠž-= Œ´’ïð
+îTŸ” |¸ Ã¹š³ýhþ\Éæ^,†Ošõþò[èÙ”_¿BSP»Xn<-0klÏ½:X`D{ [ŽRSÐ¶¦ÁU‡/“:>Í ò5}
+E}$ìª²FzZ6fi´DDx “ 4F®B&ÿ”;å¼{¬c'éoŽ¡ß«6ƒÖ
+Uh-oh, that’s a lot of broken characters! It’s at this point that I started to suspect that the eBooks were being encrypted.
+
+
+The next thing we could try to do is see if opening an eBook in the app saves a temporary version of the unencrypted book on disc somewhere. Unfortunately to the best of my knowledge, the unencrypted book stays in memory only.
+
+
+We could try to read the contents of the program in memory to find the file we’re looking for, but that wouldn’t be easy without the source code, and reverse engineering x86 binaries is not my area of expertise.
+
+
+Fortunately, we have an alternative! This eBook reader application is not just any windows application, it’s an electron app! That means it’s basically just a modified version of chromium using web technologies (HTML, CSS, JavaScript) to show us the app. If we could somehow debug the electron application we would only need to reverse engineer JavaScript code instead of an x86 binary. That sounds more up my wheelhouse!
+
+
+To start let’s locate where the app is installed
+
+
+ls C:/Program Files/
+
+
+'Common Files'  'Internet Explorer'   <company-name> 'Windows Media Player'  'Windows NT'
+
+
+ls C:/Program Files/<company-name>/<app-name>/
+
+
+ chrome_100_percent.pak   LICENSE.electron.txt     swiftshader
+ chrome_200_percent.pak   LICENSES.chromium.html  'Uninstall <app-name>.exe'
+ d3dcompiler_47.dll       locales                  v8_context_snapshot.bin
+ ffmpeg.dll               resources                vk_swiftshader.dll
+ icudtl.dat               resources.pak            vk_swiftshader_icd.json
+ libEGL.dll               <app-name>.exe            vulkan-1.dll
+ libGLESv2.dll            snapshot_blob.bin
+As we mentioned, this is clearly an electron app. After some online searching, we found that the JavaScript, HTML, and CSS files for the application are stored in resources
+
+
+ls C:/Program Files/<company-name>/<app-name>/resources
+
+
+app.asar app-update.yml  assets  elevate.exe
+The important folder here is app.asar , but it’s been packed into the .asar format in order to make it harder the view the source code. Fortunately for us, it doesn’t actually make it any harder. All we need to do is use the asar npm package to extract the archive.
+
+
+npx asar extract app.asar app_unpacked
+cd app_unpacked
+inside, we have a normal npm project!
+
+
+
+
+npm project for the eBook reader app
+It looks like we have 4 JavaScript files, and 3 HTML and CSS files. At this point, things are going swimmingly, and I thought it was going to be simple to get access to my unencrypted epub files. Unfortunately, when we open up one of the javascript files, it becomes apparent that things won’t be that easy…
+
+
+// main.js
+
+
+!function(e){var t={};function r(n){if(t[n])return t[n].exports;
+var i=t[n]={i:n,l:!1,exports:{}};return e[n].call(i.exports,i,i.exports,r)
+,i.l=!0,i.exports}r.m=e,r.c=t,r.d=function(e,t,n){r.o(e,t)||Object.
+defineProperty(e,t,{enumerable:!0,get:n})},r.r=function(e){"undefined"!=typeof
+ Symbol&&Symbol.toStringTag&&Object.defineProperty(e,Symbol.toStringTag,
+{value:"Module"}),Object.defineProperty(e,"__esModule",{value:!0})},r.t=
+function(e,t){if(1&t&&(e=r(e)),8&t)return e;if(4&t&&"object"==typeof 
+e&&e&&e.__esModule)return e;var n=Object.create(null);if(r.r(n),
+Object.defineProperty(n,"default",{enumerable:!0,value:e}),2&t&&
+"string"!=typeof e)for(var i in e)r.d(n,i,function(t)
+{return e[t]}.bind(null,i));return n},r.n=function(e)
+{var t=e&&e.__esModule?function(){return e.default}:function(){return e}
+;return r.d(t,"a",t),t},r.o=function(e,t){return Object.
+I’ve split things up to several lines so you can see it better, but this is all one line. In fact, the whole file is one line.
+
+
+# count the number of lines in main.js
+wc --lines main.js
+0 main.js
+Ouch, we should have seen that coming! This code has been minimized, removing all white space. The variable names have also been renamed to difficult to understand (but short) names like a, b , and c to reduce file size and also to obfuscate what the code is doing.
+
+
+We can add back the white-space by formatting our code, so let’s use prettier to format the main.js document
+
+
+npx prettier main.js --write
+// main.js
+
+
+!(function (e) {
+  var t = {};
+  function r(n) {
+    if (t[n]) return t[n].exports;
+    var i = (t[n] = { i: n, l: !1, exports: {} });
+    return e[n].call(i.exports, i, i.exports, r), (i.l = !0), i.exports;
+  }
+  (r.m = e),
+    (r.c = t),
+    (r.d = function (e, t, n) {
+      r.o(e, t) || Object.defineProperty(e, t, { enumerable: !0, get: n });
+    }),
+    (r.r = function (e) {
+      'undefined' != typeof Symbol &&
+        Symbol.toStringTag &&
+        Object.defineProperty(e, Symbol.toStringTag, { value: 'Module' }),
+        Object.defineProperty(e, '__esModule', { value: !0 });
+    }),
+...
+This is… better, but still not good. We can do a little bit better than this by using a deobfuscator to clean up the files. I used this one available on npm to clean up the files a bit more
+
+
+!function (e) {
+    var t = {};
+    function r(n) {
+        if (t[n]) {
+            return t[n].exports;
+        }
+        var i = t[n] = {
+            i: n,
+            l: false,
+            exports: {}
+        };
+        return e[n].call(i.exports, i, i.exports, r), i.l = true, i.exports;
+    }
+    r.m = e;
+    r.c = t;
+    r.d = function (e, t, n) {
+        r.o(e, t) || Object.defineProperty(e, t, {
+            enumerable: true,
+            get: n
+        });
+    };
+
+
+  ...
+which helps a bit more, but we still have a 49599 line minimized javascript file to work with. Fortunately, most of the code in this giant file will just be boilerplate code setting up electron and inlining modules. Indeed, scrolling to the bottom of the file we see functions that look more human-written and related to the application.
+
+
+Qp(this, 'loadUserAgent', () => {
+const e = this.window.webContents.getUserAgent();
+w ? Kr.dispatch(Ji(`${e} <app-name>/${E}`)) : Kr.dispatch(Ji(e));
+}),
+Qp(this, 'ready', async () => {
+Ie.initialize(),
+    (this.splash = Pf.create(
+    y.Splash,
+    '',
+    Be.getSplashWindowConfig()
+    )),
+    this.splash.show(),
+    await this.initialize(),
+    n.ipcMain.once(Ge.AUTO_LOGIN_CHECK_COMPLETED, () =>
+    this.startWindow()
+    );
+}),
+If you are familiar with electron, you can now see some common functions from electron like ipcMain .
+
+
+
+
+Next, we would like to find the relevant section of the code for our purposes. That is, the code responsible for loading the epub files from disc. To do this, I search for keywords that are likely to be close to the relevant code like epub , drm , and decrypt , or just looking for Korean characters in the project.
+
+
+After a lot of searching, I found this block of code
+
+
+const W = () => {
+    const e = Object(v.e)((e) => Object(S.a)(e));
+    return Object(y.useCallback)(
+      (t) => {
+        const r = b.a.basename(t),
+          n = b.a.dirname(t),
+          i = Object(u.b)(t),
+          a = b.a.join(n, 'content', '.extracted'),
+          o = b.a.join(n, r),
+          s = b.a.join(n, 'content');
+        return {
+          format: i,
+          contentPath: p.a.existsSync(a) ? s : o,
+          basePath: n,
+          rawFilePath: o,
+          unzipPath: s,
+          extractionCheckPath: a,
+          keyFilePath: '',
+          drmKey: e,
+          isLocal: !0,
+        };
+      },
+      [e]
+    );
+  },
+We have a rawFilePath, an unzipPath, a keyFilePath, and a drmKey variable! This seems very promising. After some more static code analysis and debugging, I was able to find the function that actually does the parsing of the book, and thus the decrypting.
+
+
+static createParser(e) {
+  const {
+    format: t,
+    contentPath: r,
+    keyFilePath: n,
+    drmKey: i,
+    drmVersion: a,
+    isLocal: o,
+  } = e;
+  if (!0 !== o && !c.a.canAcceptDrmVersion(a)) {
+    const e = Error('Tried to parse book with an old DRM version');
+    throw ((e.name = l.OLD_DRM_VERSION), e);
+  }
+  const u = a ? new c.a(n, i, t) : null,
+    d = this.getParserClass(t);
+  return d ? new d(r, u, s.LogLevel.WARN) : null;
+}
+It would take too long to go over the whole reverse engineering process, but with a lot of debugging and static code analysis, I was able to reverse engineer the encryption algorithm used. It uses AES (the most commonly used block cipher) , with the drmKey value in the above function createParser as the secret key, and the mysterious .dat file we talked about earlier as its initialization vector.
+
+
+I wasn’t able to figure out where the drmKey actually comes from. It most likely is stored somewhere on disc rather than being sent over the network when logging in. If it were send over the network then the app would not work without an internet connected, which I have tested to be false.
+
+
+Even though I don’t know where it comes from, I can figure out the drmKey by adding a process.stdout.write call to this function:
+
+
+q = () => {
+  const e = Object(v.e)((e) => Object(w.c)(e)),
+    t = Object(T.a)(),
+    r = Object(v.e)((e) => Object(S.a)(e)),
+    n = Object(v.e)(x.i);
+  return Object(y.useCallback)(
+    (a) => {
+      const o = e[a.bId],
+        s = b.a.join(t, a.bId, `${a.bId}.${Object(l.a)(a.format)}`),
+        c = b.a.basename(s),
+        d = b.a.dirname(s),
+        h = Object(u.b)(s),
+        f = b.a.join(d, 'content', '.extracted'),
+        g = b.a.join(d, c),
+        m = b.a.join(d, 'content');
+      process.stdout.write(`The DRM key is: ${r}\n`);
+      return {
+        format: h,
+        contentPath: p.a.existsSync(f) ? m : g,
+        basePath: d,
+        rawFilePath: g,
+        unzipPath: m,
+        extractionCheckPath: f,
+        keyFilePath: b.a.join(
+          d,
+          b.a.basename(s, b.a.extname(s)) + '.dat'
+        ),
+        drmKey: r,
+        drmVersion: null == o ? void 0 : o.drmVersion,
+        isLocal: n === i.i.LOCAL_BOOK,
+      };
+    },
+    [e, t, r]
+  );
+},
+Similarly, we can output the path to book being opened by modifying the createParser function
+
+
+static createParser(e) {
+  process.stdout.write(`Book location is: "${e.contentPath}"\n`);
+
+
+  ...
+}
+These are all the modifications we need to make to the app to be able to decrypt any of the books in our library. After making these modifications, we can repack the app again with
+
+
+npx asar pack <unpacked-folder> app.asar
+After doing this, when we run the app and open one of our books, we get an log in the terminal that looks like this:
+
+
+The DRM key is: <UUID string>
+Book location is: "C:\Users\john\AppData\Roaming\Ridibooks\library\222002478\222002478.epub"
+where UUID string is the actual key. Then, we can decrypt the book using the python script I’ve created that implements the same decrypting as in the electron app itself. The script is fairly simple and consists of 4 parts.
+
+
+A function that obtains the AES key from the contents of the .dat file and the drm key.
+A function that reads the .dat file into a python bytearray object.
+Code to recursively decrypt all the html files in a directory using AES.
+A main function to put the pieces together and accept command line arguments.
+import subprocess
+import os
+import sys
+from pathlib import Path
+
+
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+backend = default_backend()
+
+
+def get_aes_key(dat_file, drm_key):
+    """
+    Get aes key from byte-like object `dat_file` and string `drm_key`.
+    """
+    drm_key_aes = drm_key[:16].encode('utf-8')
+    i = dat_file[:16]  # first 16 bytes of the .dat file
+
+
+    cipher = Cipher(algorithms.AES(drm_key_aes), modes.CBC(i), backend=backend)
+    decryptor = cipher.decryptor()
+    o = decryptor.update(dat_file[16:]) + decryptor.finalize()
+
+
+    ae = o[len(drm_key)+32:len(drm_key)+32+16]
+    return bytearray.fromhex(ae.hex())
+This is the function that initializes the AES cipher. As you can see, it uses AES CBC mode.
+
+
+def read_dat(file):
+    with open(file, "rb") as f:
+        raw_data = f.read()
+
+
+    dat = bytearray.fromhex(raw_data.hex())
+    return dat
+This function actually reads the .dat file into a python bytearray object.
+
+
+def decryptify_html(file, key):
+    """
+    Decrypt a single HTML file using the given key
+    """
+    with open(file, "rb") as f:
+        raw_data = f.read()
+
+
+    ciphertext = raw_data[16:]
+    iv = raw_data[:16]
+
+
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=backend)
+    decryptor = cipher.decryptor()
+
+
+    plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+    decoded_plaintext = plaintext.decode("utf-8")
+
+
+    return decoded_plaintext
+
+
+def decryptify_all_html(root_dir, new_dir, key):
+    """
+    Decrypt all the html files under the `root_dir` directory.
+    """
+    for subdir, dirs, files in os.walk(root_dir):
+        subdir = Path(subdir)
+        for file in files:
+            full_file = subdir / Path(file)
+            if full_file.suffix == '.html':
+                print(f"working on subdir: {subdir}")
+                print(f"working on file: {full_file}")
+                new_data = decryptify_html(file=full_file, key=key)
+                with open(full_file, "w") as f:
+                    f.write(new_data)
+These functions decrypt a single html file, and all the html files under a certain path, respectively.
+
+
+Finally, we have a main function that takes three arguments for the input filepath, the output filepath, and the drm key. It outputs the decrypted files to the provided output filepath, and then creates an epub file by simply compressing the output folder with zip.
+
+
+def main():
+    # Get command line args
+    book_dir = Path(sys.argv[1])
+    book_name = book_dir.name
+    out_dir = Path(sys.argv[2])
+    drm_key = sys.argv[3]
+    print(f"Decrypting book `{book_dir}` to directory `{out_dir}`")
+    quit = input("If you don't want to do this, quit now (q/quit/exit): ")
+    if quit.lower() in ['q', 'quit', 'exit']:
+        return 0
+
+
+    # computing the key for decryption
+    dat_path = book_dir / Path(book_name + ".dat")
+    dat_file = read_dat(dat_path)
+    key = get_aes_key(dat_file=dat_file, drm_key=drm_key)
+
+
+    # copying the entire directory structure of book_dir to out_dir
+    subprocess.run(['mkdir', '-p', out_dir / Path("content")], check=True)
+    subprocess.run(['cp', '-r', book_dir / Path("content"), out_dir], check=True)
+
+
+    # rewrite html files in out_dir with their unencrypted versions
+    root_dir = out_dir / Path("content/OEBPS/")
+    new_dir = out_dir / Path("content/OEBPS/")  # overwrite the files, so the path is the same
+    decryptify_all_html(root_dir, new_dir, key)
+
+
+    # zip up content folder into final epub file
+    decrypted_zipped_epub_path = out_dir / Path(book_name + "-decrypted.epub")
+    subprocess.run(['zip', '-r', decrypted_zipped_epub_path, out_dir / Path("content")])
+
+
+    print(f"\nDone! Decrypted book can be found at `{decrypted_zipped_epub_path}`")
+    return 0
+Let’s try it out on the html page we looked at earlier. Before, the file looked like this
+
+
+ls 4699000001/content/OEBPS/Text/
+
+
+author.xhtml  index.xhtml  p03.xhtml       Section0000.xhtml  Section0003.xhtml  title.xhtml
+copy.xhtml    p01.xhtml    prologue.xhtml  Section0001.xhtml  Section0004.xhtml  writer.xhtml
+cover.xhtml   p02.xhtml    refer.xhtml     Section0002.xhtml  title2.xhtml
+
+
+cat index.html
+
+
+y‹ú‡¸âôÀQÒÙ€Â!)ÙØŠFb·1IÔ88©áO@ { `*§Fbx¬fÅ¶jSŠßþYwAj­'IA"­RXú'µö[¥>Ì"|
+M#"ý¦G!­pMÖ ÛiÄYÏÆ ÎÁyøÅ»ÚhXsBf.ŒœðåëCOiÀ05;_È&€ý¼+¾ÄéŸ*š6~[Îý¤• †]ÞŽŸî
+!7@«ó¯*›|ðšõòýVj%&8æEŽ¡ë)f÷W{BÃ¶×³Ãõœ Ëc|)XÅð U^Tàz ñ[IÝ~ &²We\ÉÎ3TFçR?ú
+ a31J:ÈÛ „•}ß?Áò¤›-œ£|&¿ÙŸ¯/6ðâþÐ†Ôjú#-&˜®¿©[ñyÿBÜçöhÈËäÃº3äDqŸh|E!<£@$
+"£@= |tÜ›J"ÜÞFM8Í¡{L­©ºÈ)ã×\0öøn1Q"Êô‡™D> ±ÒÊ\fºÏ7 ‚tk/FJé mÿDž¾N)V7ä¹
+aåg+ÕœÓÂ¡¹$&FJ5–_2r ƒ„Î5B›Iziƒâ…Ž6ÛmÓÆ¨Ó¾?G´T®®¶L}ÑŒ"Aîïé¨…m=ÎÉë$oh&J
+"áí)a?¬:ùèâ(ÏÍ¦lÍaCCèxæu-qo¶UáºI|RµjgŸöN0Éä†©ŸÑæXa) Xl?8æ¶Œ-ÚiåXœ¬ €|×
+ Rwn`ru==R™ZÓ¼ë&‚Î÷h‰e¬B²ùÕsOV_[*Ý6j-|Ï/,a²¬2æ.¡ó"<ýÜÚ (O¬ÎÞ%J'ª¶ Ç7B‰È
+_=„$dn­[À…ÞA×tIˆá!ð2î±rc¦š4ØDL¶‰ø¬å3{4ÖŠqu^MÉNSÕùï%sÏGì™?‹égÆ@¤>x¸(™VcŒÃã
+ó²6o%–õ'¤†ÔÆ"0ø2èwJ.¬âÂ Ï| ÒÏ¶sÙ.êåöÛ–ÑgQûÄñ‚ÙÍýÐg1)1aŸ@–,rQ'N"&óž;#jÏœ¬
+þ#¹!'O^2N{¥Lwµž"=OûªDSì†°•® AÑsãœÑ'L.Að+ò(‡ˆˆÒ¹¦æ™MW™ÅkzýÀ'â„¯Õ"÷£pÔ¥Z°
+ïû‚Ÿá2.D™s{  Ç_¨J ã€Ý p}Ò>à<Z Í¾Wz‹_4¿}³?[¼J 'j´ DÎ¼E¹¸§ÁQ68N´Y4ÉWpl‚ÉB
+Ìº:º¥^õáeZ¸d²­ŠeÃë°ÞP"œf¡H‰YÆgs±˜5¾ƒÁ¸K%Ú-DeÙ°L¤+¢OØ>tö×}òãÙ>IŠž-= Œ´'ïð
+îTŸ" |¸ Ã¹š³ýhþ\Éæ^,†Ošõþò[èÙ"_¿BSP»Xn<-0klÏ½:X`D{ [ŽRSÐ¶¦ÁU‡/":>Í ò5}
+E}$ìª²FzZ6fi´DDx " 4F®B&ÿ";å¼{¬c'éoŽ¡ß«6ƒÖ
+Versus the result we get after using our Python script to decrypt the epub
+
+
+ls 4699000001-decrypted/content/OEBPS/Text/
+
+
+author.xhtml  index.xhtml  p03.xhtml       Section0000.xhtml  Section0003.xhtml  title.xhtml
+copy.xhtml    p01.xhtml    prologue.xhtml  Section0001.xhtml  Section0004.xhtml  writer.xhtml
+cover.xhtml   p02.xhtml    refer.xhtml     Section0002.xhtml  title2.xhtml
+
+
+cat index.html
+
+
+f-8" standalone="no"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+  "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+
+
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ko">
+<head>
+  <title>제1장</title>
+  <meta content="Haansoft HWP 7.0.1.215" name="Generator" />
+  <meta content="Unidocs PDFePub" name="tools" />
+  <link href="../Styles/style.css" rel="stylesheet" type="text/css" />
+  
+<style type="text/css">
+span.c15 {color: #856154; font-family: "돋움"}
+  p.c14 {BACKGROUND-COLOR: #d87361; color: white; text-align: center}
+  span.c13 {color: #7F7F7F}
+  span.c12 {color: #D87361; font-family: "돋움"}
+  span.c11 {color: #D87361}
+  p.c10 {text-align: left}
+  h1.c9 {text-align: left}
+  p.c8 {TEXT-INDENT: -2.5em; MARGIN-LEFT: 5em}
+  span.c7 {font-family: "돋움"}
+  p.c6 {text-align: right}
+  strong.c5 {font-family: "돋움"}
+  div.c4 {text-align: center}
+  hr.c3 {BACKGROUND-IMAGE: url(c:/pdfepub3/scissors.jpg); BORDER-BOTTOM: navy solid; BORDER-LEFT: navy solid; BORDER-TOP: navy solid; BORDER-RIGHT: navy solid}
+  p.c2 {text-align: center}
+  img.c1 {WIDTH: 80.60%; HEIGHT: 85.41%}
+</style>
+</head>
+
+
+<body>
+  <div style="text-align:center"><img alt="image" class="c1" height="597" src="../Images/img2.jpg" width="403" /></div>
+</body>
+</html>
+So our decryption works!
+
+
+I was very pleased with the result of this project as I was able to read the epub books that I purchased with my preferred eBook viewing software, and also read my books with my kindle eBook reader.
+
+
+The method I have for decrypting the books could be improved by understanding where the drm key comes from. If we knew this, we would not even need to modify the electron application in order to decrypt the books.
