@@ -103,3 +103,19 @@ export function DownloadIcon({ className = "" }: { className?: string }) {
     </svg>
   )
 }
+
+export function ChevronDownIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M4 6l4 4 4-4" />
+    </svg>
+  )
+}
+
+export function ChevronUpIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M4 10l4-4 4 4" />
+    </svg>
+  )
+}

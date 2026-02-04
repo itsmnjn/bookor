@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { downloadMarkdown, downloadPdf } from "../lib/export"
 import { translateParagraph } from "../lib/gemini"
-import type { Chapter, Paragraph, ParagraphStatus, Project } from "../types/project"
+import { buildTranslationPrompt } from "../lib/presets"
+import type { Chapter, KoreanEndingStyle, Paragraph, ParagraphStatus, Project } from "../types/project"
 import { ArrowLeftIcon, CheckIcon, DownloadIcon, EyeIcon, EyeOffIcon, RefreshIcon, SettingsIcon } from "./Icons"
 import { ProgressBar } from "./ProgressBar"
+import { TranslationBar } from "./TranslationBar"
 
 interface EditorProps {
   project: Project
@@ -93,7 +95,9 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
     setTranslatingIds(prev => new Set(prev).add(paragraph.id))
 
     try {
-      const translation = await translateParagraph(paragraph, project.translationPrompt)
+      // Build the full prompt including ending style if applicable
+      const fullPrompt = buildTranslationPrompt(project.translationPrompt, project.koreanEndingStyle)
+      const translation = await translateParagraph(paragraph, fullPrompt)
       updateParagraph(activeChapter.id, paragraph.id, {
         translated: translation,
         status: "translated",
@@ -108,7 +112,7 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
         return next
       })
     }
-  }, [activeChapter, project.translationPrompt, updateParagraph])
+  }, [activeChapter, project.translationPrompt, project.koreanEndingStyle, updateParagraph])
 
   const handleMarkReviewed = useCallback((paragraph: Paragraph) => {
     if (!activeChapter) return
@@ -124,6 +128,25 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
     if (!activeChapter) return
     updateParagraph(activeChapter.id, paragraph.id, { excluded: !paragraph.excluded })
   }, [activeChapter, updateParagraph])
+
+  // Combined update to avoid race conditions when changing preset
+  const handleUpdatePrompt = useCallback((prompt: string, endingStyle?: KoreanEndingStyle | null) => {
+    const updates: Partial<Project> = { translationPrompt: prompt }
+    // null = clear ending style, undefined = keep current
+    if (endingStyle === null) {
+      updates.koreanEndingStyle = undefined
+    } else if (endingStyle !== undefined) {
+      updates.koreanEndingStyle = endingStyle
+    }
+    onUpdateProject({ ...project, ...updates })
+  }, [project, onUpdateProject])
+
+  const handleUpdateEndingStyle = useCallback((style: KoreanEndingStyle | undefined) => {
+    onUpdateProject({
+      ...project,
+      koreanEndingStyle: style,
+    })
+  }, [project, onUpdateProject])
 
   return (
     <div className="editor">
@@ -186,6 +209,14 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
           </button>
         </div>
       </header>
+
+      <TranslationBar
+        translationPrompt={project.translationPrompt}
+        koreanEndingStyle={project.koreanEndingStyle}
+        onUpdatePrompt={handleUpdatePrompt}
+        onUpdateEndingStyle={handleUpdateEndingStyle}
+        onOpenSettings={onOpenSettings}
+      />
 
       <aside className="sidebar">
         <div className="sidebar__section">

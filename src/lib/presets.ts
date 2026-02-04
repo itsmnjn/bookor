@@ -1,6 +1,24 @@
-import type { TranslationPreset } from "../types/project"
+import type { KoreanEndingStyle, TranslationPreset } from "../types/project"
 
 const CUSTOM_PRESETS_STORAGE = "bookor_custom_presets"
+
+// Korean sentence ending styles
+export const KOREAN_ENDING_STYLES: { value: KoreanEndingStyle; label: string; example: string; description: string }[] = [
+  { value: "formal", label: "합쇼체 (-습니다/-ㅂ니다)", example: "갑니다, 먹습니다", description: "Most formal, polite style" },
+  { value: "informal", label: "해요체 (-요)", example: "가요, 먹어요", description: "Informal polite, conversational" },
+  { value: "plain", label: "해라체 (-다)", example: "간다, 먹는다", description: "Written/narrative style" },
+]
+
+export function getEndingStyleInstruction(style: KoreanEndingStyle): string {
+  switch (style) {
+    case "formal":
+      return `IMPORTANT: Use the formal polite style (합쇼체/hapsyo-che) consistently. End all sentences with -습니다/-ㅂ니다 endings (e.g., 갑니다, 합니다, 먹습니다). Do not mix with other speech levels.`
+    case "informal":
+      return `IMPORTANT: Use the informal polite style (해요체/haeyo-che) consistently. End all sentences with -요 endings (e.g., 가요, 해요, 먹어요). Do not mix with other speech levels.`
+    case "plain":
+      return `IMPORTANT: Use the plain/written style (해라체/haera-che) consistently. End all sentences with -다 endings (e.g., 간다, 한다, 먹는다). This is common for narrative text. Do not mix with other speech levels.`
+  }
+}
 
 const BUILT_IN_PRESETS: TranslationPreset[] = [
   {
@@ -78,4 +96,19 @@ export function saveCustomPreset(preset: Omit<TranslationPreset, "id" | "isBuilt
 export function deleteCustomPreset(id: string): void {
   const customPresets = getCustomPresets().filter((p) => p.id !== id)
   localStorage.setItem(CUSTOM_PRESETS_STORAGE, JSON.stringify(customPresets))
+}
+
+// Check if a preset is Korean-to-Korean (needs ending style)
+export function isKoreanToKoreanPreset(presetId: string | null, prompt: string): boolean {
+  if (presetId === "korean-to-simple-korean") return true
+  // Also check prompt content for custom presets
+  const lowerPrompt = prompt.toLowerCase()
+  return lowerPrompt.includes("korean") && lowerPrompt.includes("simpler korean")
+}
+
+// Build final prompt with ending style instruction if applicable
+export function buildTranslationPrompt(basePrompt: string, endingStyle?: KoreanEndingStyle): string {
+  if (!endingStyle) return basePrompt
+  const styleInstruction = getEndingStyleInstruction(endingStyle)
+  return `${basePrompt}\n\n${styleInstruction}`
 }

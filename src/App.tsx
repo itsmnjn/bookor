@@ -7,7 +7,6 @@ import { initGemini } from "./lib/gemini"
 import { parseBookFile } from "./lib/parser"
 import { deleteProject, getCurrentProjectId, getProject, getProjectList, saveProject, setCurrentProjectId } from "./lib/storage"
 import type { Project, ProjectSummary, TranslationPreset } from "./types/project"
-import "./index.css"
 
 type View = "list" | "editor"
 

@@ -1,5 +1,7 @@
 export type ParagraphStatus = "pending" | "translated" | "reviewed"
 
+export type KoreanEndingStyle = "formal" | "informal" | "plain"
+
 export interface TranslationPreset {
   id: string
   name: string
@@ -28,6 +30,7 @@ export interface Project {
   author: string
   chapters: Chapter[]
   translationPrompt: string
+  koreanEndingStyle?: KoreanEndingStyle  // For Korean → Korean translations
   createdAt: number
   updatedAt: number
 }
