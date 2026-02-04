@@ -2,7 +2,6 @@ import { useEffect, useState } from "react"
 import {
   getAllPresets,
   getEndingStyleInstruction,
-  isKoreanToKoreanPreset,
   KOREAN_ENDING_STYLES,
 } from "../lib/presets"
 import type { KoreanEndingStyle, TranslationPreset } from "../types/project"
@@ -30,24 +29,16 @@ export function TranslationBar({
   const matchingPreset = presets.find((p) => p.prompt === translationPrompt)
   const selectedPresetId = matchingPreset?.id ?? null
 
-  const isKoreanToKorean = isKoreanToKoreanPreset(selectedPresetId, translationPrompt)
-
-  // Set default ending style for Korean-to-Korean if not already set
+  // Set default ending style if not already set
   useEffect(() => {
-    if (isKoreanToKorean && !koreanEndingStyle) {
+    if (!koreanEndingStyle) {
       onUpdateEndingStyle("informal")
     }
-  }, [isKoreanToKorean, koreanEndingStyle, onUpdateEndingStyle])
+  }, [koreanEndingStyle, onUpdateEndingStyle])
 
   const handleSelectPreset = (preset: TranslationPreset) => {
-    // Determine the ending style for this preset
-    // null = clear, undefined = keep current, value = set
-    const newEndingStyle: KoreanEndingStyle | null | undefined = isKoreanToKoreanPreset(preset.id, preset.prompt)
-      ? (koreanEndingStyle ?? "informal") // Keep current or default to informal
-      : null // Clear ending style for non-Korean presets
-
-    // Update both together to avoid race condition
-    onUpdatePrompt(preset.prompt, newEndingStyle)
+    // Keep current ending style or default to informal
+    onUpdatePrompt(preset.prompt, koreanEndingStyle ?? "informal")
   }
 
   const handleEndingStyleChange = (style: KoreanEndingStyle) => {
@@ -79,23 +70,21 @@ export function TranslationBar({
           </div>
         </div>
 
-        {isKoreanToKorean && (
-          <div className="translation-bar__endings">
-            <span className="translation-bar__label">Ending Style</span>
-            <div className="ending-selector">
-              {KOREAN_ENDING_STYLES.map((style) => (
-                <button
-                  key={style.value}
-                  className={`ending-btn ${koreanEndingStyle === style.value ? "ending-btn--active" : ""}`}
-                  onClick={() => handleEndingStyleChange(style.value)}
-                  title={`${style.description} (${style.example})`}
-                >
-                  {style.label}
-                </button>
-              ))}
-            </div>
+        <div className="translation-bar__endings">
+          <span className="translation-bar__label">Ending Style</span>
+          <div className="ending-selector">
+            {KOREAN_ENDING_STYLES.map((style) => (
+              <button
+                key={style.value}
+                className={`ending-btn ${koreanEndingStyle === style.value ? "ending-btn--active" : ""}`}
+                onClick={() => handleEndingStyleChange(style.value)}
+                title={`${style.description} (${style.example})`}
+              >
+                {style.label}
+              </button>
+            ))}
           </div>
-        )}
+        </div>
 
         <button
           className="translation-bar__toggle"
@@ -120,7 +109,7 @@ export function TranslationBar({
         <div className="translation-bar__prompt">
           <div className="translation-bar__prompt-content">
             <pre className="translation-bar__prompt-text">{translationPrompt}</pre>
-            {isKoreanToKorean && koreanEndingStyle && (
+            {koreanEndingStyle && (
               <div className="translation-bar__prompt-addition">
                 <span className="translation-bar__prompt-addition-label">+ Ending Style Instruction:</span>
                 <pre className="translation-bar__prompt-text translation-bar__prompt-text--addition">
