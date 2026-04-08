@@ -13,6 +13,7 @@ interface TranslationBarProps {
   onUpdatePrompt: (prompt: string, endingStyle?: KoreanEndingStyle | null) => void
   onUpdateEndingStyle: (style: KoreanEndingStyle | undefined) => void
   onOpenSettings: () => void
+  disabled?: boolean
 }
 
 export function TranslationBar({
@@ -21,6 +22,7 @@ export function TranslationBar({
   onUpdatePrompt,
   onUpdateEndingStyle,
   onOpenSettings,
+  disabled = false,
 }: TranslationBarProps) {
   const [showPrompt, setShowPrompt] = useState(false)
   const presets = getAllPresets()
@@ -56,6 +58,7 @@ export function TranslationBar({
                 key={preset.id}
                 className={`preset-btn preset-btn--compact ${selectedPresetId === preset.id ? "preset-btn--active" : ""}`}
                 onClick={() => handleSelectPreset(preset)}
+                disabled={disabled}
               >
                 {preset.name}
               </button>
@@ -64,6 +67,7 @@ export function TranslationBar({
               className="preset-btn preset-btn--compact preset-btn--more"
               onClick={onOpenSettings}
               title="Manage presets in settings"
+              disabled={disabled}
             >
               More...
             </button>
@@ -79,6 +83,7 @@ export function TranslationBar({
                 className={`ending-btn ${koreanEndingStyle === style.value ? "ending-btn--active" : ""}`}
                 onClick={() => handleEndingStyleChange(style.value)}
                 title={`${style.description} (${style.example})`}
+                disabled={disabled}
               >
                 {style.label}
               </button>
@@ -90,6 +95,7 @@ export function TranslationBar({
           className="translation-bar__toggle"
           onClick={() => setShowPrompt(!showPrompt)}
           aria-expanded={showPrompt}
+          disabled={disabled}
         >
           {showPrompt ? (
             <>

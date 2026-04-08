@@ -1,8 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import {
+  compactAutoTranslateState,
+  completeAutoTranslateState,
+  createAutoTranslateRunState,
+  findParagraphByLocator,
+  hasResumableAutoTranslate,
+  locatorToKey,
+  normalizeProject,
+  pauseAutoTranslateState,
+  recordAutoTranslateFailure,
+  recordAutoTranslateSuccess,
+} from "../lib/autoTranslate"
 import { downloadMarkdown, downloadPdf } from "../lib/export"
-import { translateParagraph } from "../lib/gemini"
+import { isGeminiInitialized, runProjectAutoTranslate, translateParagraph } from "../lib/gemini"
 import { buildTranslationPrompt } from "../lib/presets"
-import type { Chapter, KoreanEndingStyle, Paragraph, ParagraphStatus, Project } from "../types/project"
+import { saveProject } from "../lib/storage"
+import type { Chapter, KoreanEndingStyle, Paragraph, ParagraphLocator, ParagraphStatus, Project } from "../types/project"
 import { ArrowLeftIcon, CheckIcon, DownloadIcon, EyeIcon, EyeOffIcon, RefreshIcon, SettingsIcon } from "./Icons"
 import { ProgressBar } from "./ProgressBar"
 import { TranslationBar } from "./TranslationBar"
@@ -33,7 +46,7 @@ function getProjectProgress(project: Project) {
 
   for (const chapter of project.chapters) {
     for (const para of chapter.paragraphs) {
-      if (para.excluded) continue // Skip excluded paragraphs
+      if (para.excluded) continue
       total++
       if (para.status === "translated") translated++
       if (para.status === "reviewed") reviewed++
@@ -43,22 +56,108 @@ function getProjectProgress(project: Project) {
   return { translated, reviewed, total }
 }
 
+function updateProjectParagraph(
+  project: Project,
+  chapterId: string,
+  paragraphId: string,
+  updates: Partial<Paragraph>,
+): Project {
+  return {
+    ...project,
+    chapters: project.chapters.map((chapter) => {
+      if (chapter.id !== chapterId) return chapter
+      return {
+        ...chapter,
+        paragraphs: chapter.paragraphs.map((paragraph) => {
+          if (paragraph.id !== paragraphId) return paragraph
+          return { ...paragraph, ...updates }
+        }),
+      }
+    }),
+  }
+}
+
+function getParagraphRunKey(chapterId: string, paragraphId: string): string {
+  return `${chapterId}:${paragraphId}`
+}
+
+function getAutoTranslateCurrentLabel(project: Project, locator: ParagraphLocator | null): string {
+  if (!locator) return "No active passage"
+
+  const match = findParagraphByLocator(project, locator)
+  if (!match) return "Passage unavailable"
+
+  const chapterLabel = match.chapter.title || `Chapter ${match.chapter.number}`
+  return `${chapterLabel} • Passage ${match.paragraphIndex + 1}`
+}
+
+function getAutoTranslateStatusCopy(project: Project): string {
+  const { autoTranslate } = project
+
+  if (autoTranslate.status === "running") {
+    return autoTranslate.failed.length > 0
+      ? "Auto-translate is running. Failed passages are being skipped and logged."
+      : "Auto-translate is running across all unfinished passages."
+  }
+
+  if (autoTranslate.status === "paused") {
+    return "Auto-translate is paused. Resume will continue from the next unfinished passage."
+  }
+
+  if (autoTranslate.status === "completed") {
+    if (autoTranslate.queue.length === 0) {
+      return "No unfinished passages were found."
+    }
+
+    return autoTranslate.failed.length > 0
+      ? "Auto-translate finished with some failed passages that can be retried later."
+      : "Auto-translate finished for every queued passage."
+  }
+
+  return ""
+}
+
 export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: EditorProps) {
   const [activeChapterId, setActiveChapterId] = useState(project.chapters[0]?.id || "")
   const [translatingIds, setTranslatingIds] = useState<Set<string>>(new Set())
   const [showExportMenu, setShowExportMenu] = useState(false)
   const contentRef = useRef<HTMLElement>(null)
   const exportMenuRef = useRef<HTMLDivElement>(null)
+  const projectRef = useRef<Project>(normalizeProject(project))
+  const onUpdateProjectRef = useRef(onUpdateProject)
+  const autoTranslateControllerRef = useRef<AbortController | null>(null)
 
-  const activeChapter = project.chapters.find(ch => ch.id === activeChapterId)
-  const progress = getProjectProgress(project)
+  const normalizedProject = normalizeProject(project)
+  const activeChapter = normalizedProject.chapters.find((chapter) => chapter.id === activeChapterId)
+  const progress = getProjectProgress(normalizedProject)
+  const autoTranslate = normalizedProject.autoTranslate
+  const isAutoTranslating = autoTranslate.status === "running"
+  const hasResume = hasResumableAutoTranslate(normalizedProject)
+  const showAutoTranslatePanel = autoTranslate.status !== "idle" || autoTranslate.queue.length > 0
+  const currentLocator = autoTranslate.queue[autoTranslate.currentIndex] ?? null
+  const currentLabel = getAutoTranslateCurrentLabel(normalizedProject, currentLocator)
+  const processedCount = autoTranslate.completedCount
+  const failedCount = autoTranslate.failed.length
+  const successCount = Math.max(0, processedCount - failedCount)
 
-  // Scroll to top when chapter changes
+  useEffect(() => {
+    projectRef.current = normalizedProject
+  }, [normalizedProject])
+
+  useEffect(() => {
+    onUpdateProjectRef.current = onUpdateProject
+  }, [onUpdateProject])
+
+  useEffect(() => {
+    if (!normalizedProject.chapters.some((chapter) => chapter.id === activeChapterId)) {
+      setActiveChapterId(normalizedProject.chapters[0]?.id || "")
+    }
+  }, [normalizedProject, activeChapterId])
+
   useEffect(() => {
     contentRef.current?.scrollTo(0, 0)
   }, [activeChapterId])
 
-  // Close export menu on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
@@ -71,34 +170,92 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
     }
   }, [showExportMenu])
 
-  const updateParagraph = useCallback((chapterId: string, paragraphId: string, updates: Partial<Paragraph>) => {
-    const newChapters = project.chapters.map(ch => {
-      if (ch.id !== chapterId) return ch
-      return {
-        ...ch,
-        paragraphs: ch.paragraphs.map(p => {
-          if (p.id !== paragraphId) return p
-          return { ...p, ...updates }
-        }),
-      }
-    })
+  useEffect(() => {
+    return () => {
+      const controller = autoTranslateControllerRef.current
+      if (!controller) return
 
-    onUpdateProject({
-      ...project,
-      chapters: newChapters,
-    })
-  }, [project, onUpdateProject])
+      controller.abort()
+      autoTranslateControllerRef.current = null
+
+      const currentProject = projectRef.current
+      if (currentProject.autoTranslate.status === "running") {
+        const pausedProject = {
+          ...currentProject,
+          autoTranslate: pauseAutoTranslateState(currentProject.autoTranslate),
+        }
+        const normalizedPausedProject = normalizeProject(pausedProject)
+        projectRef.current = normalizedPausedProject
+        saveProject(normalizedPausedProject)
+      }
+    }
+  }, [])
+
+  const syncProject = useCallback((nextProject: Project) => {
+    const normalizedNextProject = normalizeProject(nextProject)
+    projectRef.current = normalizedNextProject
+    onUpdateProjectRef.current(normalizedNextProject)
+    return normalizedNextProject
+  }, [])
+
+  const persistProjectOnly = useCallback((nextProject: Project) => {
+    const normalizedNextProject = normalizeProject(nextProject)
+    projectRef.current = normalizedNextProject
+    saveProject(normalizedNextProject)
+    return normalizedNextProject
+  }, [])
+
+  const setActiveTranslation = useCallback((locator: ParagraphLocator | null) => {
+    if (!locator) {
+      setTranslatingIds(new Set())
+      return
+    }
+
+    setTranslatingIds(new Set([locatorToKey(locator)]))
+  }, [])
+
+  const updateParagraph = useCallback((chapterId: string, paragraphId: string, updates: Partial<Paragraph>) => {
+    const nextProject = updateProjectParagraph(projectRef.current, chapterId, paragraphId, updates)
+    syncProject(nextProject)
+  }, [syncProject])
+
+  const pauseActiveAutoTranslate = useCallback((persistToParent = true) => {
+    const controller = autoTranslateControllerRef.current
+    if (!controller) return
+
+    controller.abort()
+    autoTranslateControllerRef.current = null
+    setActiveTranslation(null)
+
+    const currentProject = projectRef.current
+    if (currentProject.autoTranslate.status !== "running") return
+
+    const pausedProject = {
+      ...currentProject,
+      autoTranslate: pauseAutoTranslateState(currentProject.autoTranslate),
+    }
+
+    if (persistToParent) {
+      syncProject(pausedProject)
+    } else {
+      persistProjectOnly(pausedProject)
+    }
+  }, [persistProjectOnly, setActiveTranslation, syncProject])
 
   const handleTranslate = useCallback(async (paragraph: Paragraph) => {
-    if (!activeChapter) return
+    if (isAutoTranslating) return
 
-    setTranslatingIds(prev => new Set(prev).add(paragraph.id))
+    const currentProject = projectRef.current
+    const chapter = currentProject.chapters.find((entry) => entry.id === activeChapterId)
+    if (!chapter) return
+
+    const runKey = getParagraphRunKey(chapter.id, paragraph.id)
+    setTranslatingIds((prev) => new Set(prev).add(runKey))
 
     try {
-      // Build the full prompt including ending style if applicable
-      const fullPrompt = buildTranslationPrompt(project.translationPrompt, project.koreanEndingStyle)
+      const fullPrompt = buildTranslationPrompt(currentProject.translationPrompt, currentProject.koreanEndingStyle)
       const translation = await translateParagraph(paragraph, fullPrompt)
-      updateParagraph(activeChapter.id, paragraph.id, {
+      updateParagraph(chapter.id, paragraph.id, {
         translated: translation,
         status: "translated",
       })
@@ -106,57 +263,194 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
       console.error("Translation failed:", error)
       alert("Translation failed. Make sure your API key is set in settings.")
     } finally {
-      setTranslatingIds(prev => {
+      setTranslatingIds((prev) => {
         const next = new Set(prev)
-        next.delete(paragraph.id)
+        next.delete(runKey)
         return next
       })
     }
-  }, [activeChapter, project.translationPrompt, project.koreanEndingStyle, updateParagraph])
+  }, [activeChapterId, isAutoTranslating, updateParagraph])
 
   const handleMarkReviewed = useCallback((paragraph: Paragraph) => {
-    if (!activeChapter) return
-    updateParagraph(activeChapter.id, paragraph.id, { status: "reviewed" })
-  }, [activeChapter, updateParagraph])
+    const chapter = projectRef.current.chapters.find((entry) => entry.id === activeChapterId)
+    if (!chapter) return
+    updateParagraph(chapter.id, paragraph.id, { status: "reviewed" })
+  }, [activeChapterId, updateParagraph])
 
   const handleTextChange = useCallback((paragraph: Paragraph, text: string) => {
-    if (!activeChapter) return
-    updateParagraph(activeChapter.id, paragraph.id, { translated: text })
-  }, [activeChapter, updateParagraph])
+    const chapter = projectRef.current.chapters.find((entry) => entry.id === activeChapterId)
+    if (!chapter) return
+    updateParagraph(chapter.id, paragraph.id, { translated: text })
+  }, [activeChapterId, updateParagraph])
 
   const handleToggleExcluded = useCallback((paragraph: Paragraph) => {
-    if (!activeChapter) return
-    updateParagraph(activeChapter.id, paragraph.id, { excluded: !paragraph.excluded })
-  }, [activeChapter, updateParagraph])
+    if (isAutoTranslating) return
 
-  // Combined update to avoid race conditions when changing preset
+    const chapter = projectRef.current.chapters.find((entry) => entry.id === activeChapterId)
+    if (!chapter) return
+
+    updateParagraph(chapter.id, paragraph.id, { excluded: !paragraph.excluded })
+  }, [activeChapterId, isAutoTranslating, updateParagraph])
+
   const handleUpdatePrompt = useCallback((prompt: string, endingStyle?: KoreanEndingStyle | null) => {
+    const currentProject = projectRef.current
     const updates: Partial<Project> = { translationPrompt: prompt }
-    // null = clear ending style, undefined = keep current
     if (endingStyle === null) {
       updates.koreanEndingStyle = undefined
     } else if (endingStyle !== undefined) {
       updates.koreanEndingStyle = endingStyle
     }
-    onUpdateProject({ ...project, ...updates })
-  }, [project, onUpdateProject])
+    syncProject({ ...currentProject, ...updates })
+  }, [syncProject])
 
   const handleUpdateEndingStyle = useCallback((style: KoreanEndingStyle | undefined) => {
-    onUpdateProject({
-      ...project,
+    const currentProject = projectRef.current
+    syncProject({
+      ...currentProject,
       koreanEndingStyle: style,
     })
-  }, [project, onUpdateProject])
+  }, [syncProject])
+
+  const handleAutoTranslate = useCallback(async (mode: "start" | "resume") => {
+    if (autoTranslateControllerRef.current) return
+    if (!isGeminiInitialized()) {
+      alert("Set your Gemini API key in settings before starting auto-translate.")
+      return
+    }
+
+    const currentProject = projectRef.current
+    const now = Date.now()
+    const nextAutoTranslate = mode === "start"
+      ? createAutoTranslateRunState(currentProject, now)
+      : compactAutoTranslateState(currentProject, currentProject.autoTranslate, now)
+
+    if (nextAutoTranslate.queue.length === 0 || nextAutoTranslate.currentIndex >= nextAutoTranslate.queue.length) {
+      setActiveTranslation(null)
+      syncProject({
+        ...currentProject,
+        autoTranslate: completeAutoTranslateState(nextAutoTranslate, now),
+      })
+      return
+    }
+
+    const runningAutoTranslate = {
+      ...nextAutoTranslate,
+      status: "running" as const,
+      startedAt: nextAutoTranslate.startedAt ?? now,
+      completedAt: undefined,
+      updatedAt: now,
+    }
+
+    const runningProject = syncProject({
+      ...currentProject,
+      autoTranslate: runningAutoTranslate,
+    })
+
+    const controller = new AbortController()
+    autoTranslateControllerRef.current = controller
+
+    const fullPrompt = buildTranslationPrompt(runningProject.translationPrompt, runningProject.koreanEndingStyle)
+
+    try {
+      const result = await runProjectAutoTranslate({
+        project: runningProject,
+        queue: runningAutoTranslate.queue,
+        prompt: fullPrompt,
+        startIndex: runningAutoTranslate.currentIndex,
+        signal: controller.signal,
+        onItemStart: (locator) => {
+          setActiveTranslation(locator)
+        },
+        onItemSuccess: (locator, translation, index) => {
+          const currentSnapshot = projectRef.current
+          const nextAutoTranslateState = recordAutoTranslateSuccess(currentSnapshot.autoTranslate, index + 1)
+          const updatedProject = updateProjectParagraph(
+            currentSnapshot,
+            locator.chapterId,
+            locator.paragraphId,
+            { translated: translation, status: "translated" },
+          )
+
+          syncProject({
+            ...updatedProject,
+            autoTranslate: index + 1 >= nextAutoTranslateState.queue.length
+              ? completeAutoTranslateState(nextAutoTranslateState)
+              : nextAutoTranslateState,
+          })
+        },
+        onItemFailure: (locator, error, index) => {
+          const currentSnapshot = projectRef.current
+          const nextAutoTranslateState = recordAutoTranslateFailure(
+            currentSnapshot.autoTranslate,
+            locator,
+            error.message,
+            index + 1,
+          )
+
+          syncProject({
+            ...currentSnapshot,
+            autoTranslate: index + 1 >= nextAutoTranslateState.queue.length
+              ? completeAutoTranslateState(nextAutoTranslateState)
+              : nextAutoTranslateState,
+          })
+        },
+      })
+
+      autoTranslateControllerRef.current = null
+      setActiveTranslation(null)
+
+      if (result.status === "aborted") {
+        const currentSnapshot = projectRef.current
+        if (currentSnapshot.autoTranslate.status === "running") {
+          syncProject({
+            ...currentSnapshot,
+            autoTranslate: pauseAutoTranslateState(currentSnapshot.autoTranslate),
+          })
+        }
+        return
+      }
+
+      const currentSnapshot = projectRef.current
+      if (currentSnapshot.autoTranslate.status !== "completed") {
+        syncProject({
+          ...currentSnapshot,
+          autoTranslate: completeAutoTranslateState(currentSnapshot.autoTranslate),
+        })
+      }
+    } catch (error) {
+      autoTranslateControllerRef.current = null
+      setActiveTranslation(null)
+      console.error("Auto-translate failed:", error)
+
+      const currentSnapshot = projectRef.current
+      if (currentSnapshot.autoTranslate.status === "running") {
+        syncProject({
+          ...currentSnapshot,
+          autoTranslate: pauseAutoTranslateState(currentSnapshot.autoTranslate),
+        })
+      }
+
+      alert("Auto-translate stopped unexpectedly. You can resume from the last unfinished passage.")
+    }
+  }, [setActiveTranslation, syncProject])
+
+  const handleBack = useCallback(() => {
+    if (isAutoTranslating) {
+      pauseActiveAutoTranslate(true)
+    }
+
+    onBack()
+  }, [isAutoTranslating, onBack, pauseActiveAutoTranslate])
 
   return (
     <div className="editor">
       <header className="editor__topbar">
-        <button className="editor__back" onClick={onBack}>
+        <button className="editor__back" onClick={handleBack}>
           <ArrowLeftIcon className="icon" />
           <span>Projects</span>
         </button>
 
-        <h1 className="editor__title">{project.title}</h1>
+        <h1 className="editor__title">{normalizedProject.title}</h1>
 
         <div className="editor__progress">
           <ProgressBar
@@ -186,7 +480,7 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
                 <button
                   className="export-menu__item"
                   onClick={() => {
-                    downloadMarkdown(project)
+                    downloadMarkdown(normalizedProject)
                     setShowExportMenu(false)
                   }}
                 >
@@ -195,7 +489,7 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
                 <button
                   className="export-menu__item"
                   onClick={() => {
-                    downloadPdf(project)
+                    downloadPdf(normalizedProject)
                     setShowExportMenu(false)
                   }}
                 >
@@ -204,24 +498,114 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
               </div>
             )}
           </div>
-          <button className="btn btn--ghost" onClick={onOpenSettings} aria-label="Settings">
+          <button
+            className="btn btn--ghost"
+            onClick={onOpenSettings}
+            aria-label="Settings"
+            disabled={isAutoTranslating}
+          >
             <SettingsIcon className="icon icon--lg" />
           </button>
         </div>
       </header>
 
+      {hasResume && (
+        <div className="auto-translate-banner">
+          <div>
+            <strong>Auto-translate paused</strong>
+            <p>
+              Resume will continue from {currentLabel}.
+            </p>
+          </div>
+          <button className="btn btn--primary btn--sm" onClick={() => void handleAutoTranslate("resume")}>
+            Resume
+          </button>
+        </div>
+      )}
+
       <TranslationBar
-        translationPrompt={project.translationPrompt}
-        koreanEndingStyle={project.koreanEndingStyle}
+        translationPrompt={normalizedProject.translationPrompt}
+        koreanEndingStyle={normalizedProject.koreanEndingStyle}
         onUpdatePrompt={handleUpdatePrompt}
         onUpdateEndingStyle={handleUpdateEndingStyle}
         onOpenSettings={onOpenSettings}
+        disabled={isAutoTranslating}
       />
 
       <aside className="sidebar">
         <div className="sidebar__section">
-          <h2 className="sidebar__heading">Chapters</h2>
-          {project.chapters.map((chapter) => {
+          <div className="sidebar__heading-row">
+            <h2 className="sidebar__heading">Chapters</h2>
+            {!isAutoTranslating && !hasResume && (
+              <button className="btn btn--secondary btn--sm" onClick={() => void handleAutoTranslate("start")}>
+                Auto-Translate
+              </button>
+            )}
+            {!isAutoTranslating && hasResume && (
+              <button className="btn btn--primary btn--sm" onClick={() => void handleAutoTranslate("resume")}>
+                Resume
+              </button>
+            )}
+            {isAutoTranslating && (
+              <button className="btn btn--danger btn--sm" onClick={() => pauseActiveAutoTranslate(true)}>
+                Cancel
+              </button>
+            )}
+          </div>
+
+          {showAutoTranslatePanel && (
+            <section className={`auto-translate-panel auto-translate-panel--${autoTranslate.status}`}>
+              <div className="auto-translate-panel__header">
+                <span className="auto-translate-panel__eyebrow">Auto-Translate</span>
+                <span className={`status-badge status-badge--${autoTranslate.status}`}>
+                  {autoTranslate.status}
+                </span>
+              </div>
+
+              <p className="auto-translate-panel__copy">{getAutoTranslateStatusCopy(normalizedProject)}</p>
+
+              <div className="auto-translate-panel__stats">
+                <div>
+                  <span className="auto-translate-panel__stat-label">Processed</span>
+                  <strong>{processedCount}/{autoTranslate.queue.length}</strong>
+                </div>
+                <div>
+                  <span className="auto-translate-panel__stat-label">Succeeded</span>
+                  <strong>{successCount}</strong>
+                </div>
+                <div>
+                  <span className="auto-translate-panel__stat-label">Failed</span>
+                  <strong>{failedCount}</strong>
+                </div>
+              </div>
+
+              <div className="auto-translate-panel__current">
+                <span className="auto-translate-panel__stat-label">Current</span>
+                <strong>{currentLabel}</strong>
+              </div>
+
+              {autoTranslate.failed.length > 0 && (
+                <div className="auto-translate-panel__failures">
+                  <span className="auto-translate-panel__stat-label">Failures</span>
+                  <ul>
+                    {autoTranslate.failed.slice(0, 3).map((failure) => (
+                      <li key={`${locatorToKey(failure.locator)}-${failure.error}`}>
+                        <strong>{getAutoTranslateCurrentLabel(normalizedProject, failure.locator)}</strong>
+                        <span>{failure.error}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  {autoTranslate.failed.length > 3 && (
+                    <p className="auto-translate-panel__overflow">
+                      +{autoTranslate.failed.length - 3} more failed passages
+                    </p>
+                  )}
+                </div>
+              )}
+            </section>
+          )}
+
+          {normalizedProject.chapters.map((chapter) => {
             const status = getChapterStatus(chapter)
             return (
               <button
@@ -251,14 +635,14 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
 
               <div className="paragraph-list">
                 {activeChapter.paragraphs.map((paragraph) => {
-                  const isTranslating = translatingIds.has(paragraph.id)
+                  const isTranslating = translatingIds.has(getParagraphRunKey(activeChapter.id, paragraph.id))
 
                   return (
                     <article
                       key={paragraph.id}
                       className={`paragraph-pair paragraph-pair--${paragraph.status}${
                         paragraph.excluded ? " paragraph-pair--excluded" : ""
-                      }`}
+                      }${isTranslating ? " paragraph-pair--translating" : ""}`}
                     >
                       <div className="paragraph-pair__side paragraph-pair__side--original">
                         <div className="paragraph-pair__label">English</div>
@@ -304,13 +688,14 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
                               className={`btn btn--ghost btn--sm${paragraph.excluded ? " btn--active" : ""}`}
                               onClick={() => handleToggleExcluded(paragraph)}
                               title={paragraph.excluded ? "Include paragraph" : "Exclude paragraph"}
+                              disabled={isAutoTranslating}
                             >
                               {paragraph.excluded ? <EyeIcon className="icon" /> : <EyeOffIcon className="icon" />}
                             </button>
                             <button
                               className="btn btn--secondary btn--sm"
-                              onClick={() => handleTranslate(paragraph)}
-                              disabled={isTranslating}
+                              onClick={() => void handleTranslate(paragraph)}
+                              disabled={isTranslating || isAutoTranslating}
                             >
                               {isTranslating ? <span className="spinner" /> : <RefreshIcon className="icon" />}
                               {paragraph.translated ? "Re-translate" : "Translate"}

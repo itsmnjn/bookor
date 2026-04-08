@@ -1,7 +1,37 @@
-import { GoogleGenAI } from "@google/genai"
-import type { Paragraph } from "../types/project"
+import { GoogleGenAI, ThinkingLevel } from "@google/genai"
+import { findParagraphByLocator, isParagraphEligibleForAutoTranslate } from "./autoTranslate"
+import type { Paragraph, ParagraphLocator, Project } from "../types/project"
+
+const GEMINI_MODEL = "gemini-3-flash-preview"
+
+const geminiThinkingMinimal = {
+  thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+}
 
 let client: GoogleGenAI | null = null
+
+export interface TranslateParagraphOptions {
+  signal?: AbortSignal
+}
+
+export interface AutoTranslateRunnerState {
+  status: "running" | "completed" | "aborted"
+  currentIndex: number
+  total: number
+  currentLocator: ParagraphLocator | null
+}
+
+export interface RunProjectAutoTranslateOptions {
+  project: Project
+  queue: ParagraphLocator[]
+  prompt: string
+  startIndex?: number
+  signal?: AbortSignal
+  onItemStart?: (locator: ParagraphLocator, index: number, total: number) => void
+  onItemSuccess?: (locator: ParagraphLocator, translation: string, index: number, total: number) => void
+  onItemFailure?: (locator: ParagraphLocator, error: Error, index: number, total: number) => void
+  onStateChange?: (state: AutoTranslateRunnerState) => void
+}
 
 export function initGemini(apiKey: string): void {
   client = new GoogleGenAI({ apiKey })
@@ -14,6 +44,7 @@ export function isGeminiInitialized(): boolean {
 export async function translateParagraph(
   paragraph: Paragraph,
   prompt: string,
+  options: TranslateParagraphOptions = {},
 ): Promise<string> {
   if (!client) {
     throw new Error("Gemini not initialized. Please set your API key.")
@@ -22,9 +53,11 @@ export async function translateParagraph(
   const fullPrompt = `${prompt}\n\nText to translate:\n${paragraph.original}`
 
   const result = await client.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: GEMINI_MODEL,
     contents: fullPrompt,
     config: {
+      ...geminiThinkingMinimal,
+      abortSignal: options.signal,
       temperature: 0.3, // Lower temperature for more consistent translations
       maxOutputTokens: 8192,
     },
@@ -72,6 +105,119 @@ export async function translateBatch(
   return results
 }
 
+export async function runProjectAutoTranslate({
+  project,
+  queue,
+  prompt,
+  startIndex = 0,
+  signal,
+  onItemStart,
+  onItemSuccess,
+  onItemFailure,
+  onStateChange,
+}: RunProjectAutoTranslateOptions): Promise<AutoTranslateRunnerState> {
+  const total = queue.length
+  const initialIndex = Math.max(0, Math.min(startIndex, total))
+
+  onStateChange?.({
+    status: "running",
+    currentIndex: initialIndex,
+    total,
+    currentLocator: queue[initialIndex] ?? null,
+  })
+
+  for (let index = initialIndex; index < total; index++) {
+    const locator = queue[index]!
+
+    if (signal?.aborted) {
+      return {
+        status: "aborted",
+        currentIndex: index,
+        total,
+        currentLocator: locator,
+      }
+    }
+
+    const match = findParagraphByLocator(project, locator)
+    if (!match || !isParagraphEligibleForAutoTranslate(match.paragraph)) {
+      onStateChange?.({
+        status: "running",
+        currentIndex: index + 1,
+        total,
+        currentLocator: queue[index + 1] ?? null,
+      })
+      continue
+    }
+
+    onItemStart?.(locator, index, total)
+
+    try {
+      const translation = await translateParagraph(match.paragraph, prompt, { signal })
+
+      if (signal?.aborted) {
+        return {
+          status: "aborted",
+          currentIndex: index,
+          total,
+          currentLocator: locator,
+        }
+      }
+
+      onItemSuccess?.(locator, translation, index, total)
+      onStateChange?.({
+        status: "running",
+        currentIndex: index + 1,
+        total,
+        currentLocator: queue[index + 1] ?? null,
+      })
+    } catch (error) {
+      if (isAbortError(error) || signal?.aborted) {
+        return {
+          status: "aborted",
+          currentIndex: index,
+          total,
+          currentLocator: locator,
+        }
+      }
+
+      onItemFailure?.(locator, toError(error), index, total)
+      onStateChange?.({
+        status: "running",
+        currentIndex: index + 1,
+        total,
+        currentLocator: queue[index + 1] ?? null,
+      })
+    }
+
+    if (index < total - 1) {
+      try {
+        await waitWithAbort(100, signal)
+      } catch (error) {
+        if (isAbortError(error) || signal?.aborted) {
+          return {
+            status: "aborted",
+            currentIndex: index + 1,
+            total,
+            currentLocator: queue[index + 1] ?? null,
+          }
+        }
+
+        throw error
+      }
+    }
+  }
+
+  const completedState: AutoTranslateRunnerState = {
+    status: "completed",
+    currentIndex: total,
+    total,
+    currentLocator: null,
+  }
+
+  onStateChange?.(completedState)
+  return completedState
+}
+
 export interface BookMetadata {
   title: string
   author: string
@@ -92,9 +238,10 @@ Text:
 ${textSample}`
 
   const result = await client.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: GEMINI_MODEL,
     contents: prompt,
     config: {
+      ...geminiThinkingMinimal,
       temperature: 0.1,
       maxOutputTokens: 256,
     },
@@ -117,4 +264,36 @@ ${textSample}`
   }
 
   return { title: "Unknown", author: "Unknown" }
+}
+
+function isAbortError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false
+  const maybeError = error as { name?: string }
+  return maybeError.name === "AbortError"
+}
+
+function toError(error: unknown): Error {
+  if (error instanceof Error) return error
+  return new Error(typeof error === "string" ? error : "Translation failed")
+}
+
+function waitWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) {
+    return new Promise((resolve) => setTimeout(resolve, ms))
+  }
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      signal.removeEventListener("abort", handleAbort)
+      resolve()
+    }, ms)
+
+    const handleAbort = () => {
+      clearTimeout(timeout)
+      signal.removeEventListener("abort", handleAbort)
+      reject(new DOMException("Aborted", "AbortError"))
+    }
+
+    signal.addEventListener("abort", handleAbort, { once: true })
+  })
 }

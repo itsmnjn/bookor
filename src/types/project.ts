@@ -1,6 +1,7 @@
 export type ParagraphStatus = "pending" | "translated" | "reviewed"
 
 export type KoreanEndingStyle = "formal" | "informal" | "plain"
+export type AutoTranslateStatus = "idle" | "running" | "paused" | "completed"
 
 export interface TranslationPreset {
   id: string
@@ -24,6 +25,27 @@ export interface Chapter {
   paragraphs: Paragraph[]
 }
 
+export interface ParagraphLocator {
+  chapterId: string
+  paragraphId: string
+}
+
+export interface AutoTranslateFailure {
+  locator: ParagraphLocator
+  error: string
+}
+
+export interface AutoTranslateState {
+  status: AutoTranslateStatus
+  queue: ParagraphLocator[]
+  currentIndex: number
+  completedCount: number
+  failed: AutoTranslateFailure[]
+  startedAt?: number
+  updatedAt: number
+  completedAt?: number
+}
+
 export interface Project {
   id: string
   title: string
@@ -31,6 +53,7 @@ export interface Project {
   chapters: Chapter[]
   translationPrompt: string
   koreanEndingStyle?: KoreanEndingStyle  // For Korean → Korean translations
+  autoTranslate: AutoTranslateState
   createdAt: number
   updatedAt: number
 }

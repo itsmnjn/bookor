@@ -1,3 +1,4 @@
+import { normalizeProject, normalizeStoredProject } from "./autoTranslate"
 import type { Project, ProjectSummary } from "../types/project"
 
 const PROJECTS_KEY = "bookor_projects"
@@ -8,7 +9,7 @@ export function getProjectList(): ProjectSummary[] {
   if (!data) return []
 
   const projects: Project[] = JSON.parse(data)
-  return projects.map(projectToSummary)
+  return projects.map(normalizeStoredProject).map(projectToSummary)
 }
 
 export function getProject(id: string): Project | null {
@@ -16,18 +17,20 @@ export function getProject(id: string): Project | null {
   if (!data) return null
 
   const projects: Project[] = JSON.parse(data)
-  return projects.find(p => p.id === id) || null
+  const project = projects.find(p => p.id === id)
+  return project ? normalizeStoredProject(project) : null
 }
 
 export function saveProject(project: Project): void {
   const data = localStorage.getItem(PROJECTS_KEY)
   const projects: Project[] = data ? JSON.parse(data) : []
+  const normalizedProject = normalizeProject(project)
 
-  const index = projects.findIndex(p => p.id === project.id)
+  const index = projects.findIndex(p => p.id === normalizedProject.id)
   if (index >= 0) {
-    projects[index] = { ...project, updatedAt: Date.now() }
+    projects[index] = { ...normalizedProject, updatedAt: Date.now() }
   } else {
-    projects.push({ ...project, updatedAt: Date.now() })
+    projects.push({ ...normalizedProject, updatedAt: Date.now() })
   }
 
   localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects))

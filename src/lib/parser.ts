@@ -1,4 +1,5 @@
 import type { Chapter, Paragraph, Project } from "../types/project"
+import { createEmptyAutoTranslateState } from "./autoTranslate"
 import { parseEpubFile } from "./epubParser"
 import { getDefaultPreset } from "./presets"
 
@@ -157,6 +158,7 @@ export function parseTextFile(
     author,
     chapters: nonEmptyChapters,
     translationPrompt: translationPrompt ?? getDefaultPreset().prompt,
+    autoTranslate: createEmptyAutoTranslateState(),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   }

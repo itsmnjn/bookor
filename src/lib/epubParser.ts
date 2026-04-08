@@ -1,5 +1,6 @@
 import JSZip from "jszip"
 import type { Chapter, Paragraph, Project } from "../types/project"
+import { createEmptyAutoTranslateState } from "./autoTranslate"
 import { getDefaultPreset } from "./presets"
 
 /**
@@ -75,6 +76,7 @@ export async function parseEpubFile(
     author: finalAuthor,
     chapters,
     translationPrompt: translationPrompt ?? getDefaultPreset().prompt,
+    autoTranslate: createEmptyAutoTranslateState(),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   }

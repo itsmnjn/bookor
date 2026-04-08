@@ -242,7 +242,7 @@ def main():
         else:
             book_ids = [selection]
 
-    output_base = Path.cwd() / "decrypted_books"
+    output_base = Path("Z:/decrypted_books")
     output_base.mkdir(exist_ok=True)
 
     for book_id in book_ids:
