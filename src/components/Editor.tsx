@@ -548,7 +548,7 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
             )}
             {isAutoTranslating && (
               <button className="btn btn--danger btn--sm" onClick={() => pauseActiveAutoTranslate(true)}>
-                Cancel
+                Pause
               </button>
             )}
           </div>
