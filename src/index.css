@@ -418,8 +418,11 @@ body::before {
 .modal {
   background: var(--bg-elevated);
   width: 100%;
-  max-width: 480px;
+  max-width: 640px;
+  max-height: calc(100vh - 2 * var(--space-lg));
   margin: var(--space-lg);
+  display: flex;
+  flex-direction: column;
   animation: slideUp var(--transition-base) ease;
 }
 
@@ -469,6 +472,8 @@ body::before {
 
 .modal__body {
   padding: var(--space-lg);
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .modal__footer {
