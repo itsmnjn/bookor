@@ -127,29 +127,44 @@ interface OpfData {
   spine: string[]
 }
 
+interface MarkupElementNode {
+  type: "element"
+  name: string
+  attributes: Record<string, string>
+  children: MarkupNode[]
+}
+
+interface MarkupTextNode {
+  type: "text"
+  text: string
+}
+
+type MarkupNode = MarkupElementNode | MarkupTextNode
+
 /**
  * Parse the OPF file to extract metadata, manifest, and spine
  */
 function parseOpf(opfContent: string): OpfData {
+  const root = parseMarkup(opfContent)
   const manifest = new Map<string, { href: string; mediaType: string }>()
 
-  for (const rawItem of matchTags(opfContent, "item")) {
-    const id = extractAttribute(rawItem, "id")
-    const href = extractAttribute(rawItem, "href")
-    const mediaType = extractAttribute(rawItem, "media-type") || ""
+  for (const item of findAllElements(root, (node) => node.name === "item")) {
+    const id = item.attributes.id
+    const href = item.attributes.href
+    const mediaType = item.attributes["media-type"] || ""
     if (id && href) {
       manifest.set(id, { href, mediaType })
     }
   }
 
-  const spine = matchTags(opfContent, "itemref")
-    .map((rawItem) => extractAttribute(rawItem, "idref"))
+  const spine = findAllElements(root, (node) => node.name === "itemref")
+    .map((item) => item.attributes.idref)
     .filter((idref): idref is string => Boolean(idref))
 
   return {
     metadata: {
-      title: extractFirstText(opfContent, ["dc:title", "title"]) ?? undefined,
-      author: extractFirstText(opfContent, ["dc:creator", "creator"]) ?? undefined,
+      title: findFirstElementText(root, ["dc:title", "title"]) ?? undefined,
+      author: findFirstElementText(root, ["dc:creator", "creator"]) ?? undefined,
     },
     manifest,
     spine,
@@ -165,18 +180,20 @@ interface XhtmlResult {
  * Parse XHTML content to extract title and paragraphs
  */
 function parseXhtmlContent(xhtml: string, startId: number): XhtmlResult {
-  const paragraphs: Paragraph[] = []
+  const root = parseMarkup(xhtml)
+  const body = findFirstElement(root, (node) => node.name === "body") ?? root
+  let title = findFirstElementText(body, ["h1", "h2", "h3"]) ?? findFirstElementText(root, ["title"])
+  const blocks = extractReadableBlocks(body)
 
-  const title = extractFirstText(xhtml, ["h1", "h2", "title"])
-
-  for (const rawParagraph of matchTagContents(xhtml, "p")) {
-    const text = cleanupHtmlText(rawParagraph)
-    if (text && text.length > 0) {
-      paragraphs.push(createParagraph(startId + paragraphs.length, text))
-    }
+  if (!title && blocks[0]) {
+    title = blocks[0]
   }
 
-  return { title, paragraphs }
+  const contentBlocks = title && blocks[0] === title ? blocks.slice(1) : blocks
+  return {
+    title,
+    paragraphs: contentBlocks.map((text, index) => createParagraph(startId + index, text)),
+  }
 }
 
 function createParagraph(id: number, text: string): Paragraph {
@@ -206,50 +223,212 @@ function resolveZipPath(baseDir: string, href: string): string {
 }
 
 function extractTagAttribute(content: string, tagName: string, attributeName: string): string | undefined {
-  const tagMatch = content.match(new RegExp(`<${tagName}\\b[^>]*>`, "i"))
-  if (!tagMatch) return undefined
-  return extractAttribute(tagMatch[0], attributeName)
+  const root = parseMarkup(content)
+  const element = findFirstElement(root, (node) => node.name === tagName.toLowerCase())
+  return element?.attributes[attributeName.toLowerCase()]
 }
 
-function extractAttribute(tag: string, attributeName: string): string | undefined {
-  const match = tag.match(new RegExp(`${escapeRegExp(attributeName)}\\s*=\\s*["']([^"']+)["']`, "i"))
-  return match?.[1]
+function parseMarkup(content: string): MarkupElementNode {
+  const root: MarkupElementNode = { type: "element", name: "__root__", attributes: {}, children: [] }
+  const stack: MarkupElementNode[] = [root]
+  const tokens = content.match(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>|<[^>]+>|[^<]+/g) ?? []
+
+  for (const token of tokens) {
+    if (!token) continue
+
+    if (token.startsWith("<!--") || token.startsWith("<?") || /^<!DOCTYPE/i.test(token)) {
+      continue
+    }
+
+    if (token.startsWith("<![CDATA[")) {
+      stack[stack.length - 1]!.children.push({
+        type: "text",
+        text: token.slice(9, -3),
+      })
+      continue
+    }
+
+    if (token.startsWith("</")) {
+      const closeName = token.slice(2, -1).trim().toLowerCase()
+      while (stack.length > 1) {
+        const current = stack.pop()!
+        if (current.name === closeName) break
+      }
+      continue
+    }
+
+    if (token.startsWith("<")) {
+      const selfClosing = token.endsWith("/>")
+      const inner = token.slice(1, token.length - (selfClosing ? 2 : 1)).trim()
+      const nameMatch = inner.match(/^([^\s/>]+)/)
+      if (!nameMatch) continue
+
+      const name = nameMatch[1]!.toLowerCase()
+      const attributes = parseAttributes(inner.slice(nameMatch[0].length))
+      const node: MarkupElementNode = { type: "element", name, attributes, children: [] }
+      stack[stack.length - 1]!.children.push(node)
+
+      if (!selfClosing && !VOID_ELEMENT_NAMES.has(name)) {
+        stack.push(node)
+      }
+      continue
+    }
+
+    stack[stack.length - 1]!.children.push({ type: "text", text: token })
+  }
+
+  return root
 }
 
-function matchTags(content: string, tagName: string): string[] {
-  return Array.from(content.matchAll(new RegExp(`<${tagName}\\b[^>]*>`, "gi")), (match) => match[0])
+function parseAttributes(source: string): Record<string, string> {
+  const attributes: Record<string, string> = {}
+  const pattern = /([^\s=/>]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g
+
+  for (const match of source.matchAll(pattern)) {
+    const name = match[1]?.toLowerCase()
+    if (!name) continue
+    const value = match[2] ?? match[3] ?? match[4] ?? ""
+    attributes[name] = value
+  }
+
+  return attributes
 }
 
-function matchTagContents(content: string, tagName: string): string[] {
-  return Array.from(
-    content.matchAll(new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)</${tagName}>`, "gi")),
-    (match) => match[1] ?? "",
-  )
-}
+function findFirstElement(node: MarkupElementNode, predicate: (node: MarkupElementNode) => boolean): MarkupElementNode | null {
+  for (const child of node.children) {
+    if (child.type !== "element") continue
+    if (predicate(child)) return child
 
-function extractFirstText(content: string, tagNames: string[]): string | null {
-  for (const tagName of tagNames) {
-    const match = content.match(new RegExp(`<${escapeRegExp(tagName)}\\b[^>]*>([\\s\\S]*?)</${escapeRegExp(tagName)}>`, "i"))
-    const value = match?.[1] ? cleanupHtmlText(match[1]) : ""
-    if (value) return value
+    const nested = findFirstElement(child, predicate)
+    if (nested) return nested
   }
 
   return null
 }
 
-function cleanupHtmlText(content: string): string {
-  return decodeHtmlEntities(
-    content
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/(p|div|section|article|li|tr|h1|h2|h3|h4|h5|h6)>/gi, "\n")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\u00a0/g, " ")
-      .replace(/[ \t]+\n/g, "\n")
-      .replace(/\n[ \t]+/g, "\n")
-      .replace(/[ \t]{2,}/g, " ")
-      .replace(/\n{3,}/g, "\n\n")
-      .trim(),
-  )
+function findAllElements(node: MarkupElementNode, predicate: (node: MarkupElementNode) => boolean): MarkupElementNode[] {
+  const matches: MarkupElementNode[] = []
+
+  for (const child of node.children) {
+    if (child.type !== "element") continue
+    if (predicate(child)) {
+      matches.push(child)
+    }
+    matches.push(...findAllElements(child, predicate))
+  }
+
+  return matches
+}
+
+function findFirstElementText(node: MarkupElementNode, tagNames: string[]): string | null {
+  const nameSet = new Set(tagNames.map((name) => name.toLowerCase()))
+  const element = findFirstElement(node, (candidate) => nameSet.has(candidate.name))
+  if (!element) return null
+
+  const value = normalizeExtractedText(renderText(element))
+  return value || null
+}
+
+function extractReadableBlocks(node: MarkupElementNode): string[] {
+  const blocks: string[] = []
+
+  for (const child of node.children) {
+    if (child.type === "element") {
+      collectReadableBlocks(child, blocks)
+    }
+  }
+
+  return blocks
+}
+
+function collectReadableBlocks(node: MarkupElementNode, blocks: string[]): void {
+  if (SKIP_ELEMENT_NAMES.has(node.name)) return
+
+  if (HEADING_ELEMENT_NAMES.has(node.name)) {
+    return
+  }
+
+  if (LEAF_BLOCK_ELEMENT_NAMES.has(node.name)) {
+    blocks.push(...splitRenderedBlock(renderText(node), node.name))
+    return
+  }
+
+  if (CONTAINER_BLOCK_ELEMENT_NAMES.has(node.name) && !hasDirectStructuredChildren(node)) {
+    blocks.push(...splitRenderedBlock(renderText(node), node.name))
+    return
+  }
+
+  for (const child of node.children) {
+    if (child.type === "element") {
+      collectReadableBlocks(child, blocks)
+    }
+  }
+}
+
+function hasDirectStructuredChildren(node: MarkupElementNode): boolean {
+  return node.children.some((child) => {
+    if (child.type !== "element") return false
+    if (!LEAF_BLOCK_ELEMENT_NAMES.has(child.name)
+      && !CONTAINER_BLOCK_ELEMENT_NAMES.has(child.name)
+      && !HEADING_ELEMENT_NAMES.has(child.name)) {
+      return false
+    }
+
+    return normalizeExtractedText(renderText(child)).length > 0
+  })
+}
+
+function renderText(node: MarkupElementNode | MarkupTextNode): string {
+  if (node.type === "text") {
+    return node.text
+  }
+
+  if (SKIP_ELEMENT_NAMES.has(node.name)) return ""
+  if (LINE_BREAK_ELEMENT_NAMES.has(node.name)) return "\n"
+
+  let result = ""
+  for (const child of node.children) {
+    result += renderText(child)
+    if (child.type === "element" && BLOCK_BOUNDARY_ELEMENT_NAMES.has(child.name)) {
+      result += "\n"
+    }
+  }
+
+  return result
+}
+
+function splitRenderedBlock(text: string, tagName: string): string[] {
+  const normalized = normalizeExtractedText(text)
+  if (!normalized) return []
+
+  const paragraphChunks = normalized
+    .split(/\n{2,}/)
+    .map((chunk) => chunk.trim())
+    .filter((chunk) => chunk.length > 0)
+
+  if (paragraphChunks.length > 1) {
+    return paragraphChunks
+  }
+
+  if (CONTAINER_BLOCK_ELEMENT_NAMES.has(tagName)) {
+    return normalized
+      .split(/\n+/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+  }
+
+  return [normalized]
+}
+
+function normalizeExtractedText(content: string): string {
+  return decodeHtmlEntities(content)
+    .replace(/\r/g, "")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
 }
 
 function decodeHtmlEntities(content: string): string {
@@ -264,6 +443,15 @@ function decodeHtmlEntities(content: string): string {
     .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
 }
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-}
+const VOID_ELEMENT_NAMES = new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source"])
+const SKIP_ELEMENT_NAMES = new Set(["head", "script", "style", "meta", "link", "img", "svg", "noscript"])
+const LINE_BREAK_ELEMENT_NAMES = new Set(["br", "hr"])
+const HEADING_ELEMENT_NAMES = new Set(["h1", "h2", "h3", "h4", "h5", "h6"])
+const LEAF_BLOCK_ELEMENT_NAMES = new Set(["p", "blockquote", "li", "pre"])
+const CONTAINER_BLOCK_ELEMENT_NAMES = new Set(["body", "div", "section", "article", "td"])
+const BLOCK_BOUNDARY_ELEMENT_NAMES = new Set([
+  ...LEAF_BLOCK_ELEMENT_NAMES,
+  ...CONTAINER_BLOCK_ELEMENT_NAMES,
+  ...HEADING_ELEMENT_NAMES,
+  "tr",
+])
