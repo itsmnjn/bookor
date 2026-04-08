@@ -9,8 +9,10 @@ type ImportMode = "upload" | "url"
 
 interface ImportModalProps {
   onClose: () => void
-  onImport: (file: File, title: string, author: string, preset: TranslationPreset) => void
+  onImport: (file: File, title: string, author: string, preset: TranslationPreset, importBatchSize: number) => void
 }
+
+const DEFAULT_IMPORT_BATCH_SIZE = 250
 
 export function ImportModal({ onClose, onImport }: ImportModalProps) {
   const [importMode, setImportMode] = useState<ImportMode>("upload")
@@ -24,6 +26,7 @@ export function ImportModal({ onClose, onImport }: ImportModalProps) {
   const [fetchedFromUrl, setFetchedFromUrl] = useState(false)
   const [presets] = useState<TranslationPreset[]>(getAllPresets())
   const [selectedPresetId, setSelectedPresetId] = useState(getDefaultPreset().id)
+  const [importBatchSize, setImportBatchSize] = useState(DEFAULT_IMPORT_BATCH_SIZE)
   const [isDetecting, setIsDetecting] = useState(false)
   const [detectError, setDetectError] = useState<string | null>(null)
 
@@ -135,7 +138,7 @@ export function ImportModal({ onClose, onImport }: ImportModalProps) {
   const handleSubmit = () => {
     if (file && title.trim()) {
       const selectedPreset = presets.find((p) => p.id === selectedPresetId) || getDefaultPreset()
-      onImport(file, title.trim(), author.trim() || "Unknown", selectedPreset)
+      onImport(file, title.trim(), author.trim() || "Unknown", selectedPreset, normalizeImportBatchSize(importBatchSize))
     }
   }
 
@@ -283,6 +286,23 @@ export function ImportModal({ onClose, onImport }: ImportModalProps) {
             </div>
             <p className="form-hint">Choose how text will be translated in this project</p>
           </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="import-batch-size">Batch Size</label>
+            <input
+              id="import-batch-size"
+              type="number"
+              min={50}
+              max={5000}
+              step={50}
+              className="form-input"
+              value={importBatchSize}
+              onChange={(e) => setImportBatchSize(normalizeImportBatchSize(Number(e.target.value)))}
+            />
+            <p className="form-hint">
+              Minimum characters to pack into each imported translation unit. Lower values create more batches; higher values create fewer, larger batches.
+            </p>
+          </div>
         </div>
 
         <footer className="modal__footer">
@@ -300,4 +320,9 @@ export function ImportModal({ onClose, onImport }: ImportModalProps) {
       </div>
     </div>
   )
+}
+
+function normalizeImportBatchSize(batchSize: number): number {
+  if (!Number.isFinite(batchSize)) return DEFAULT_IMPORT_BATCH_SIZE
+  return Math.min(5000, Math.max(50, Math.floor(batchSize)))
 }

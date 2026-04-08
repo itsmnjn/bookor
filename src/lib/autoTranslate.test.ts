@@ -14,6 +14,7 @@ function createProject(): Project {
     title: "Test Book",
     author: "Author",
     translationPrompt: "Translate this.",
+    importBatchSize: 1,
     autoTranslate: createEmptyAutoTranslateState(1),
     createdAt: 1,
     updatedAt: 1,

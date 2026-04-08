@@ -8,6 +8,8 @@ import type {
   Project,
 } from "../types/project"
 
+const DEFAULT_IMPORT_BATCH_SIZE = 250
+
 interface LocatedParagraph {
   chapter: Chapter
   paragraph: Paragraph
@@ -61,6 +63,7 @@ export function normalizeAutoTranslateState(
 export function normalizeProject(project: Project): Project {
   return {
     ...project,
+    importBatchSize: normalizeImportBatchSize(project.importBatchSize),
     autoTranslate: normalizeAutoTranslateState(project.autoTranslate, project.updatedAt || Date.now()),
   }
 }
@@ -68,10 +71,16 @@ export function normalizeProject(project: Project): Project {
 export function normalizeStoredProject(project: Project): Project {
   return {
     ...project,
+    importBatchSize: normalizeImportBatchSize(project.importBatchSize),
     autoTranslate: normalizeAutoTranslateState(project.autoTranslate, project.updatedAt || Date.now(), {
       pauseRunning: true,
     }),
   }
+}
+
+function normalizeImportBatchSize(batchSize: number | undefined): number {
+  if (typeof batchSize !== "number" || !Number.isFinite(batchSize)) return DEFAULT_IMPORT_BATCH_SIZE
+  return Math.max(50, Math.floor(batchSize))
 }
 
 export function isParagraphEligibleForAutoTranslate(paragraph: Paragraph): boolean {

@@ -16,8 +16,9 @@ export async function parseEpubFile(
   title: string,
   author: string,
   translationPrompt?: string,
+  importBatchSize = 250,
 ): Promise<Project> {
-  const zip = await JSZip.loadAsync(file)
+  const zip = await JSZip.loadAsync(await file.arrayBuffer())
 
   // Find the OPF file path from container.xml
   const opfPath = await findOpfPath(zip)
@@ -48,7 +49,7 @@ export async function parseEpubFile(
       continue
     }
 
-    const contentPath = opfDir + item.href
+    const contentPath = resolveZipPath(opfDir, item.href)
     const xhtmlContent = await zip.file(contentPath)?.async("string")
     if (!xhtmlContent) continue
 
@@ -76,6 +77,7 @@ export async function parseEpubFile(
     author: finalAuthor,
     chapters,
     translationPrompt: translationPrompt ?? getDefaultPreset().prompt,
+    importBatchSize: Math.max(50, Math.floor(importBatchSize)),
     autoTranslate: createEmptyAutoTranslateState(),
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -87,7 +89,7 @@ export async function parseEpubFile(
  * Useful for auto-detection without parsing the full book.
  */
 export async function extractEpubMetadata(file: File): Promise<{ title: string; author: string }> {
-  const zip = await JSZip.loadAsync(file)
+  const zip = await JSZip.loadAsync(await file.arrayBuffer())
   const opfPath = await findOpfPath(zip)
   const opfContent = await zip.file(opfPath)?.async("string")
   if (!opfContent) {
@@ -110,11 +112,7 @@ async function findOpfPath(zip: JSZip): Promise<string> {
     throw new Error("Could not find META-INF/container.xml")
   }
 
-  // Parse container.xml to find rootfile path
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(containerContent, "text/xml")
-  const rootfile = doc.querySelector("rootfile")
-  const fullPath = rootfile?.getAttribute("full-path")
+  const fullPath = extractTagAttribute(containerContent, "rootfile", "full-path")
 
   if (!fullPath) {
     throw new Error("Could not find OPF path in container.xml")
@@ -133,41 +131,29 @@ interface OpfData {
  * Parse the OPF file to extract metadata, manifest, and spine
  */
 function parseOpf(opfContent: string): OpfData {
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(opfContent, "text/xml")
-
-  // Extract metadata
-  const titleEl = doc.querySelector("metadata title, dc\\:title")
-  const creatorEl = doc.querySelector("metadata creator, dc\\:creator")
-
-  const metadata = {
-    title: titleEl?.textContent?.trim(),
-    author: creatorEl?.textContent?.trim(),
-  }
-
-  // Build manifest map (id -> {href, mediaType})
   const manifest = new Map<string, { href: string; mediaType: string }>()
-  const manifestItems = Array.from(doc.querySelectorAll("manifest item"))
-  for (const item of manifestItems) {
-    const id = item.getAttribute("id")
-    const href = item.getAttribute("href")
-    const mediaType = item.getAttribute("media-type")
+
+  for (const rawItem of matchTags(opfContent, "item")) {
+    const id = extractAttribute(rawItem, "id")
+    const href = extractAttribute(rawItem, "href")
+    const mediaType = extractAttribute(rawItem, "media-type") || ""
     if (id && href) {
-      manifest.set(id, { href, mediaType: mediaType || "" })
+      manifest.set(id, { href, mediaType })
     }
   }
 
-  // Get spine order (list of idref values)
-  const spine: string[] = []
-  const spineItems = Array.from(doc.querySelectorAll("spine itemref"))
-  for (const item of spineItems) {
-    const idref = item.getAttribute("idref")
-    if (idref) {
-      spine.push(idref)
-    }
-  }
+  const spine = matchTags(opfContent, "itemref")
+    .map((rawItem) => extractAttribute(rawItem, "idref"))
+    .filter((idref): idref is string => Boolean(idref))
 
-  return { metadata, manifest, spine }
+  return {
+    metadata: {
+      title: extractFirstText(opfContent, ["dc:title", "title"]) ?? undefined,
+      author: extractFirstText(opfContent, ["dc:creator", "creator"]) ?? undefined,
+    },
+    manifest,
+    spine,
+  }
 }
 
 interface XhtmlResult {
@@ -179,29 +165,12 @@ interface XhtmlResult {
  * Parse XHTML content to extract title and paragraphs
  */
 function parseXhtmlContent(xhtml: string, startId: number): XhtmlResult {
-  const parser = new DOMParser()
-  const doc = parser.parseFromString(xhtml, "text/html")
-
-  // Try to find chapter title from h1, h2, or title element
-  let title: string | null = null
-  const h1 = doc.querySelector("h1")
-  const h2 = doc.querySelector("h2")
-  const titleEl = doc.querySelector("title")
-
-  if (h1?.textContent?.trim()) {
-    title = h1.textContent.trim()
-  } else if (h2?.textContent?.trim()) {
-    title = h2.textContent.trim()
-  } else if (titleEl?.textContent?.trim()) {
-    title = titleEl.textContent.trim()
-  }
-
-  // Extract paragraphs from <p> elements
   const paragraphs: Paragraph[] = []
-  const pElements = Array.from(doc.querySelectorAll("p"))
 
-  for (const p of pElements) {
-    const text = p.textContent?.trim()
+  const title = extractFirstText(xhtml, ["h1", "h2", "title"])
+
+  for (const rawParagraph of matchTagContents(xhtml, "p")) {
+    const text = cleanupHtmlText(rawParagraph)
     if (text && text.length > 0) {
       paragraphs.push(createParagraph(startId + paragraphs.length, text))
     }
@@ -218,4 +187,83 @@ function createParagraph(id: number, text: string): Paragraph {
     status: "pending",
     excluded: false,
   }
+}
+
+function resolveZipPath(baseDir: string, href: string): string {
+  const segments = `${baseDir}${href}`.split("/")
+  const resolved: string[] = []
+
+  for (const segment of segments) {
+    if (!segment || segment === ".") continue
+    if (segment === "..") {
+      resolved.pop()
+      continue
+    }
+    resolved.push(segment)
+  }
+
+  return resolved.join("/")
+}
+
+function extractTagAttribute(content: string, tagName: string, attributeName: string): string | undefined {
+  const tagMatch = content.match(new RegExp(`<${tagName}\\b[^>]*>`, "i"))
+  if (!tagMatch) return undefined
+  return extractAttribute(tagMatch[0], attributeName)
+}
+
+function extractAttribute(tag: string, attributeName: string): string | undefined {
+  const match = tag.match(new RegExp(`${escapeRegExp(attributeName)}\\s*=\\s*["']([^"']+)["']`, "i"))
+  return match?.[1]
+}
+
+function matchTags(content: string, tagName: string): string[] {
+  return Array.from(content.matchAll(new RegExp(`<${tagName}\\b[^>]*>`, "gi")), (match) => match[0])
+}
+
+function matchTagContents(content: string, tagName: string): string[] {
+  return Array.from(
+    content.matchAll(new RegExp(`<${tagName}\\b[^>]*>([\\s\\S]*?)</${tagName}>`, "gi")),
+    (match) => match[1] ?? "",
+  )
+}
+
+function extractFirstText(content: string, tagNames: string[]): string | null {
+  for (const tagName of tagNames) {
+    const match = content.match(new RegExp(`<${escapeRegExp(tagName)}\\b[^>]*>([\\s\\S]*?)</${escapeRegExp(tagName)}>`, "i"))
+    const value = match?.[1] ? cleanupHtmlText(match[1]) : ""
+    if (value) return value
+  }
+
+  return null
+}
+
+function cleanupHtmlText(content: string): string {
+  return decodeHtmlEntities(
+    content
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|section|article|li|tr|h1|h2|h3|h4|h5|h6)>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\u00a0/g, " ")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n[ \t]+/g, "\n")
+      .replace(/[ \t]{2,}/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim(),
+  )
+}
+
+function decodeHtmlEntities(content: string): string {
+  return content
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(parseInt(dec, 10)))
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
 }

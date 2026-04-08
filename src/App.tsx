@@ -59,9 +59,15 @@ export function App() {
     setProjects(getProjectList())
   }, [])
 
-  const handleImport = useCallback(async (file: File, title: string, author: string, preset: TranslationPreset) => {
+  const handleImport = useCallback(async (
+    file: File,
+    title: string,
+    author: string,
+    preset: TranslationPreset,
+    importBatchSize: number,
+  ) => {
     try {
-      const project = await parseBookFile(file, title, author, preset.prompt)
+      const project = await parseBookFile(file, title, author, preset.prompt, importBatchSize)
       saveProject(project)
       setProjects(getProjectList())
       setShowImportModal(false)

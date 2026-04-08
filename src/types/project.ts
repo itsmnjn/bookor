@@ -52,6 +52,7 @@ export interface Project {
   author: string
   chapters: Chapter[]
   translationPrompt: string
+  importBatchSize: number
   koreanEndingStyle?: KoreanEndingStyle  // For Korean → Korean translations
   autoTranslate: AutoTranslateState
   createdAt: number

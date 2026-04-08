@@ -3,7 +3,7 @@ import { createEmptyAutoTranslateState } from "./autoTranslate"
 import { parseEpubFile } from "./epubParser"
 import { getDefaultPreset } from "./presets"
 
-const MIN_GROUP_LENGTH = 250 // Minimum characters before flushing a paragraph group
+const DEFAULT_IMPORT_BATCH_SIZE = 250
 
 /**
  * Strip Project Gutenberg boilerplate (license text before/after content).
@@ -84,6 +84,7 @@ export function parseTextFile(
   title: string,
   author: string,
   translationPrompt?: string,
+  importBatchSize = DEFAULT_IMPORT_BATCH_SIZE,
 ): Project {
   // Strip Gutenberg boilerplate first
   const strippedText = stripGutenbergBoilerplate(text)
@@ -158,6 +159,7 @@ export function parseTextFile(
     author,
     chapters: nonEmptyChapters,
     translationPrompt: translationPrompt ?? getDefaultPreset().prompt,
+    importBatchSize: normalizeImportBatchSize(importBatchSize),
     autoTranslate: createEmptyAutoTranslateState(),
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -183,24 +185,26 @@ export async function parseBookFile(
   title: string,
   author: string,
   translationPrompt?: string,
+  importBatchSize = DEFAULT_IMPORT_BATCH_SIZE,
 ): Promise<Project> {
   const ext = file.name.toLowerCase().split(".").pop()
+  const normalizedBatchSize = normalizeImportBatchSize(importBatchSize)
 
   let project: Project
   if (ext === "epub") {
-    project = await parseEpubFile(file, title, author, translationPrompt)
+    project = await parseEpubFile(file, title, author, translationPrompt, normalizedBatchSize)
   } else {
     const text = await file.text()
-    project = parseTextFile(text, title, author, translationPrompt)
+    project = parseTextFile(text, title, author, translationPrompt, normalizedBatchSize)
   }
 
-  // Apply paragraph grouping to combine short paragraphs
-  return applyParagraphGrouping(project, MIN_GROUP_LENGTH)
+  // Merge source paragraphs into larger translation units during import.
+  return applyParagraphGrouping(project, normalizedBatchSize)
 }
 
 /**
  * Apply paragraph grouping to all chapters in a project.
- * Groups consecutive short paragraphs until reaching minimum length.
+ * Groups consecutive paragraphs until reaching the configured minimum length.
  */
 function applyParagraphGrouping(project: Project, minLength: number): Project {
   const groupedChapters = project.chapters.map((chapter) => ({
@@ -215,8 +219,7 @@ function applyParagraphGrouping(project: Project, minLength: number): Project {
 }
 
 /**
- * Group consecutive paragraphs until reaching minimum character threshold.
- * Short dialogue lines and fragments are combined into larger units.
+ * Group consecutive paragraphs until reaching the configured minimum length.
  */
 function groupParagraphs(paragraphs: Paragraph[], minLength: number): Paragraph[] {
   const grouped: Paragraph[] = []
@@ -241,4 +244,9 @@ function groupParagraphs(paragraphs: Paragraph[], minLength: number): Paragraph[
   }
 
   return grouped
+}
+
+function normalizeImportBatchSize(batchSize: number): number {
+  if (!Number.isFinite(batchSize)) return DEFAULT_IMPORT_BATCH_SIZE
+  return Math.max(50, Math.floor(batchSize))
 }
