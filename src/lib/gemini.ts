@@ -1,6 +1,11 @@
 import { GoogleGenAI, ThinkingLevel } from "@google/genai"
-import { findParagraphByLocator, isParagraphEligibleForAutoTranslate } from "./autoTranslate"
 import type { Paragraph, ParagraphLocator, Project } from "../types/project"
+import {
+  buildTranslationContext,
+  findParagraphByLocator,
+  isParagraphEligibleForAutoTranslate,
+  type TranslationContext,
+} from "./autoTranslate"
 
 const GEMINI_MODEL = "gemini-3-flash-preview"
 
@@ -12,6 +17,7 @@ let client: GoogleGenAI | null = null
 
 export interface TranslateParagraphOptions {
   signal?: AbortSignal
+  context?: TranslationContext | null
 }
 
 export interface AutoTranslateRunnerState {
@@ -50,7 +56,7 @@ export async function translateParagraph(
     throw new Error("Gemini not initialized. Please set your API key.")
   }
 
-  const fullPrompt = `${prompt}\n\nText to translate:\n${paragraph.original}`
+  const fullPrompt = buildGeminiTranslationPrompt(prompt, paragraph.original, options.context)
 
   const result = await client.models.generateContent({
     model: GEMINI_MODEL,
@@ -75,6 +81,34 @@ export async function translateParagraph(
   }
 
   return result.text || ""
+}
+
+function buildGeminiTranslationPrompt(
+  prompt: string,
+  targetText: string,
+  context?: TranslationContext | null,
+): string {
+  if (!context || (context.before.length === 0 && context.after.length === 0)) {
+    return `${prompt}\n\nText to translate:\n${targetText}`
+  }
+
+  return `${prompt}
+
+Use the surrounding context only to resolve pronouns, speaker identity, tone, references, and continuity.
+Translate only the TARGET PASSAGE. Do not translate or include any context passages in your answer.
+
+${formatContextSection("Context before", context.before)}
+
+TARGET PASSAGE:
+${targetText}
+
+${formatContextSection("Context after", context.after)}`
+}
+
+function formatContextSection(label: string, passages: string[]): string {
+  if (passages.length === 0) return `${label}:\nNone`
+
+  return `${label}:\n${passages.map((passage, index) => `[${index + 1}] ${passage}`).join("\n\n")}`
 }
 
 export async function translateBatch(
@@ -152,7 +186,10 @@ export async function runProjectAutoTranslate({
     onItemStart?.(locator, index, total)
 
     try {
-      const translation = await translateParagraph(match.paragraph, prompt, { signal })
+      const translation = await translateParagraph(match.paragraph, prompt, {
+        signal,
+        context: buildTranslationContext(project, locator),
+      })
 
       if (signal?.aborted) {
         return {

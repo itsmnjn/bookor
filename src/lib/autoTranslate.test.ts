@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test"
+import type { Project } from "../types/project"
 import {
   buildAutoTranslateQueue,
+  buildTranslationContext,
   compactAutoTranslateState,
   createEmptyAutoTranslateState,
   normalizeProject,
   normalizeStoredProject,
 } from "./autoTranslate"
-import type { Project } from "../types/project"
 
 function createProject(): Project {
   return {
@@ -49,6 +50,30 @@ describe("auto translate helpers", () => {
       { chapterId: "ch-1", paragraphId: "p-0" },
       { chapterId: "ch-2", paragraphId: "p-0" },
     ])
+  })
+
+  test("buildTranslationContext includes nearby passages in chapter order", () => {
+    const project = createProject()
+
+    const context = buildTranslationContext(project, { chapterId: "ch-1", paragraphId: "p-1" }, 1)
+
+    expect(context).toEqual({
+      before: ["First"],
+      after: ["Third"],
+      chapterTitle: "One",
+    })
+  })
+
+  test("buildTranslationContext clamps at chapter boundaries", () => {
+    const project = createProject()
+
+    const context = buildTranslationContext(project, { chapterId: "ch-2", paragraphId: "p-0" }, 2)
+
+    expect(context).toEqual({
+      before: [],
+      after: [],
+      chapterTitle: "Two",
+    })
   })
 
   test("compactAutoTranslateState removes no-longer-eligible remaining passages", () => {

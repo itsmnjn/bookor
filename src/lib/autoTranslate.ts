@@ -17,6 +17,12 @@ interface LocatedParagraph {
   paragraphIndex: number
 }
 
+export interface TranslationContext {
+  before: string[]
+  after: string[]
+  chapterTitle?: string
+}
+
 export function createEmptyAutoTranslateState(now = Date.now()): AutoTranslateState {
   return {
     status: "idle",
@@ -120,6 +126,31 @@ export function findParagraphByLocator(project: Project, locator: ParagraphLocat
   }
 }
 
+export function buildTranslationContext(
+  project: Project,
+  locator: ParagraphLocator,
+  windowSize = 2,
+): TranslationContext | null {
+  const match = findParagraphByLocator(project, locator)
+  if (!match) return null
+
+  const chapterTitle = match.chapter.title || `Chapter ${match.chapter.number}`
+  const paragraphs = match.chapter.paragraphs
+  const contextSize = Math.max(0, Math.floor(windowSize))
+  const before = paragraphs
+    .slice(Math.max(0, match.paragraphIndex - contextSize), match.paragraphIndex)
+    .map((paragraph) => paragraph.original)
+  const after = paragraphs
+    .slice(match.paragraphIndex + 1, match.paragraphIndex + 1 + contextSize)
+    .map((paragraph) => paragraph.original)
+
+  return {
+    before,
+    after,
+    chapterTitle,
+  }
+}
+
 export function compactAutoTranslateState(
   project: Project,
   state: AutoTranslateState,
@@ -155,8 +186,8 @@ export function compactAutoTranslateState(
   const status: AutoTranslateStatus = currentIndex >= queue.length
     ? "completed"
     : normalized.status === "idle"
-      ? "paused"
-      : normalized.status
+    ? "paused"
+    : normalized.status
 
   return {
     ...normalized,

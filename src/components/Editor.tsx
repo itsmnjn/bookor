@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
+  buildTranslationContext,
   compactAutoTranslateState,
   completeAutoTranslateState,
   createAutoTranslateRunState,
@@ -15,7 +16,14 @@ import { downloadMarkdown, downloadPdf } from "../lib/export"
 import { isGeminiInitialized, runProjectAutoTranslate, translateParagraph } from "../lib/gemini"
 import { buildTranslationPrompt } from "../lib/presets"
 import { saveProject } from "../lib/storage"
-import type { Chapter, KoreanEndingStyle, Paragraph, ParagraphLocator, ParagraphStatus, Project } from "../types/project"
+import type {
+  Chapter,
+  KoreanEndingStyle,
+  Paragraph,
+  ParagraphLocator,
+  ParagraphStatus,
+  Project,
+} from "../types/project"
 import { ArrowLeftIcon, CheckIcon, DownloadIcon, EyeIcon, EyeOffIcon, RefreshIcon, SettingsIcon } from "./Icons"
 import { ProgressBar } from "./ProgressBar"
 import { TranslationBar } from "./TranslationBar"
@@ -254,7 +262,12 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
 
     try {
       const fullPrompt = buildTranslationPrompt(currentProject.translationPrompt, currentProject.koreanEndingStyle)
-      const translation = await translateParagraph(paragraph, fullPrompt)
+      const translation = await translateParagraph(paragraph, fullPrompt, {
+        context: buildTranslationContext(currentProject, {
+          chapterId: chapter.id,
+          paragraphId: paragraph.id,
+        }),
+      })
       updateParagraph(chapter.id, paragraph.id, {
         translated: translation,
         status: "translated",
@@ -537,17 +550,26 @@ export function Editor({ project, onBack, onOpenSettings, onUpdateProject }: Edi
           <div className="sidebar__heading-row">
             <h2 className="sidebar__heading">Chapters</h2>
             {!isAutoTranslating && !hasResume && (
-              <button className="btn btn--secondary btn--sm" onClick={() => void handleAutoTranslate("start")}>
+              <button
+                className="btn btn--secondary btn--sm"
+                onClick={() => void handleAutoTranslate("start")}
+              >
                 Auto-Translate
               </button>
             )}
             {!isAutoTranslating && hasResume && (
-              <button className="btn btn--primary btn--sm" onClick={() => void handleAutoTranslate("resume")}>
+              <button
+                className="btn btn--primary btn--sm"
+                onClick={() => void handleAutoTranslate("resume")}
+              >
                 Resume
               </button>
             )}
             {isAutoTranslating && (
-              <button className="btn btn--danger btn--sm" onClick={() => pauseActiveAutoTranslate(true)}>
+              <button
+                className="btn btn--danger btn--sm"
+                onClick={() => pauseActiveAutoTranslate(true)}
+              >
                 Pause
               </button>
             )}
