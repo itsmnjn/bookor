@@ -83,7 +83,7 @@ export async function translateParagraph(
   return result.text || ""
 }
 
-function buildGeminiTranslationPrompt(
+export function buildGeminiTranslationPrompt(
   prompt: string,
   targetText: string,
   context?: TranslationContext | null,
@@ -92,8 +92,10 @@ function buildGeminiTranslationPrompt(
     return `${prompt}\n\nText to translate:\n${targetText}`
   }
 
-  return `${prompt}
+  return `Translation instructions for TARGET PASSAGE:
+${prompt}
 
+When the translation instructions refer to "the following text", "the text", or similar wording, interpret that as TARGET PASSAGE only.
 Use the surrounding context only to resolve pronouns, speaker identity, tone, references, and continuity.
 Translate only the TARGET PASSAGE. Do not translate or include any context passages in your answer.
 
