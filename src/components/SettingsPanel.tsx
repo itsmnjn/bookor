@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react"
 import { initGemini, isGeminiInitialized } from "../lib/gemini"
-import { getAllPresets, getPresetById, saveCustomPreset, deleteCustomPreset } from "../lib/presets"
+import { deleteCustomPreset, getAllPresets, getPresetById, saveCustomPreset, updateCustomPreset } from "../lib/presets"
 import type { TranslationPreset } from "../types/project"
-import { CloseIcon, TrashIcon, PlusIcon } from "./Icons"
+import { CloseIcon, PlusIcon, TrashIcon } from "./Icons"
 
 interface SettingsPanelProps {
   translationPrompt?: string
@@ -23,6 +23,8 @@ export function SettingsPanel({ translationPrompt, onUpdatePrompt, onClose }: Se
   const [newPresetPrompt, setNewPresetPrompt] = useState("")
 
   const hasProject = translationPrompt !== undefined && onUpdatePrompt !== undefined
+  const selectedPreset = selectedPresetId ? presets.find((preset) => preset.id === selectedPresetId) ?? null : null
+  const hasUnsavedCustomPrompt = !!selectedPreset && !selectedPreset.isBuiltIn && customPrompt !== selectedPreset.prompt
 
   // Find matching preset on mount
   useEffect(() => {
@@ -55,7 +57,7 @@ export function SettingsPanel({ translationPrompt, onUpdatePrompt, onClose }: Se
 
   const handleSelectPreset = (presetId: string) => {
     if (!onUpdatePrompt) return
-    const preset = getPresetById(presetId)
+    const preset = presets.find((entry) => entry.id === presetId) ?? getPresetById(presetId)
     if (preset) {
       setSelectedPresetId(presetId)
       setCustomPrompt(preset.prompt)
@@ -66,9 +68,21 @@ export function SettingsPanel({ translationPrompt, onUpdatePrompt, onClose }: Se
   const handleCustomPromptChange = (value: string) => {
     if (!onUpdatePrompt) return
     setCustomPrompt(value)
-    const matchingPreset = presets.find((p) => p.prompt === value)
-    setSelectedPresetId(matchingPreset?.id ?? null)
+    if (!selectedPreset || selectedPreset.isBuiltIn) {
+      const matchingPreset = presets.find((p) => p.prompt === value)
+      setSelectedPresetId(matchingPreset?.id ?? null)
+    }
     onUpdatePrompt(value)
+  }
+
+  const handleSaveCustomPrompt = () => {
+    if (!selectedPreset || selectedPreset.isBuiltIn || !customPrompt.trim()) return
+    const updatedPreset = updateCustomPreset(selectedPreset.id, { prompt: customPrompt.trim() })
+    if (!updatedPreset) return
+
+    setPresets(getAllPresets())
+    setCustomPrompt(updatedPreset.prompt)
+    onUpdatePrompt?.(updatedPreset.prompt)
   }
 
   const handleCreatePreset = () => {
@@ -101,8 +115,6 @@ export function SettingsPanel({ translationPrompt, onUpdatePrompt, onClose }: Se
       }
     }
   }
-
-  const selectedPreset = selectedPresetId ? getPresetById(selectedPresetId) : null
 
   return (
     <>
@@ -228,11 +240,24 @@ export function SettingsPanel({ translationPrompt, onUpdatePrompt, onClose }: Se
                     placeholder="Instructions for the AI translator..."
                     readOnly={selectedPreset?.isBuiltIn}
                   />
-                  <p className="form-hint">
-                    {selectedPreset?.isBuiltIn
-                      ? "Built-in presets cannot be edited. Create a custom preset to modify."
-                      : "This prompt is sent to Gemini along with each paragraph to translate."}
-                  </p>
+                  <div className="prompt-editor__footer">
+                    <p className="form-hint">
+                      {selectedPreset?.isBuiltIn
+                        ? "Built-in presets cannot be edited. Create a custom preset to modify."
+                        : hasUnsavedCustomPrompt
+                        ? "You have unsaved changes to this custom preset."
+                        : "This prompt is sent to Gemini along with each paragraph to translate."}
+                    </p>
+                    {hasUnsavedCustomPrompt && (
+                      <button
+                        className="btn btn--primary btn--sm"
+                        onClick={handleSaveCustomPrompt}
+                        disabled={!customPrompt.trim()}
+                      >
+                        Save
+                      </button>
+                    )}
+                  </div>
                 </>
               )}
             </section>

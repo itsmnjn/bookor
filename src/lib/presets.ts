@@ -3,11 +3,22 @@ import type { KoreanEndingStyle, TranslationPreset } from "../types/project"
 const CUSTOM_PRESETS_STORAGE = "bookor_custom_presets"
 
 // Korean sentence ending styles
-export const KOREAN_ENDING_STYLES: { value: KoreanEndingStyle; label: string; example: string; description: string }[] = [
-  { value: "formal", label: "합쇼체 (-습니다/-ㅂ니다)", example: "갑니다, 먹습니다", description: "Most formal, polite style" },
-  { value: "informal", label: "해요체 (-요)", example: "가요, 먹어요", description: "Informal polite, conversational" },
-  { value: "plain", label: "해라체 (-다)", example: "간다, 먹는다", description: "Written/narrative style" },
-]
+export const KOREAN_ENDING_STYLES: { value: KoreanEndingStyle; label: string; example: string; description: string }[] =
+  [
+    {
+      value: "formal",
+      label: "합쇼체 (-습니다/-ㅂ니다)",
+      example: "갑니다, 먹습니다",
+      description: "Most formal, polite style",
+    },
+    {
+      value: "informal",
+      label: "해요체 (-요)",
+      example: "가요, 먹어요",
+      description: "Informal polite, conversational",
+    },
+    { value: "plain", label: "해라체 (-다)", example: "간다, 먹는다", description: "Written/narrative style" },
+  ]
 
 export function getEndingStyleInstruction(style: KoreanEndingStyle): string {
   switch (style) {
@@ -91,6 +102,28 @@ export function saveCustomPreset(preset: Omit<TranslationPreset, "id" | "isBuilt
   localStorage.setItem(CUSTOM_PRESETS_STORAGE, JSON.stringify(customPresets))
 
   return newPreset
+}
+
+export function updateCustomPreset(
+  id: string,
+  updates: Partial<Omit<TranslationPreset, "id" | "isBuiltIn">>,
+): TranslationPreset | null {
+  let updatedPreset: TranslationPreset | null = null
+  const customPresets = getCustomPresets().map((preset) => {
+    if (preset.id !== id) return preset
+    updatedPreset = {
+      ...preset,
+      ...updates,
+      id: preset.id,
+      isBuiltIn: false,
+    }
+    return updatedPreset
+  })
+
+  if (!updatedPreset) return null
+
+  localStorage.setItem(CUSTOM_PRESETS_STORAGE, JSON.stringify(customPresets))
+  return updatedPreset
 }
 
 export function deleteCustomPreset(id: string): void {

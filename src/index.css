@@ -1434,6 +1434,18 @@ body::before {
   margin-top: var(--space-sm);
 }
 
+.prompt-editor__footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-top: var(--space-sm);
+}
+
+.prompt-editor__footer .form-hint {
+  margin-top: 0;
+}
+
 /* API Key Input */
 .api-key-input {
   display: flex;
