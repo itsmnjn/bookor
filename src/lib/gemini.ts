@@ -7,7 +7,7 @@ import {
   type TranslationContext,
 } from "./autoTranslate"
 
-const GEMINI_MODEL = "gemini-3-flash-preview"
+const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
 
 const geminiThinkingMinimal = {
   thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
@@ -59,7 +59,7 @@ export async function translateParagraph(
   const fullPrompt = buildGeminiTranslationPrompt(prompt, paragraph.original, options.context)
 
   const result = await client.models.generateContent({
-    model: GEMINI_MODEL,
+    model: DEFAULT_GEMINI_MODEL,
     contents: fullPrompt,
     config: {
       ...geminiThinkingMinimal,
@@ -277,7 +277,7 @@ Text:
 ${textSample}`
 
   const result = await client.models.generateContent({
-    model: GEMINI_MODEL,
+    model: DEFAULT_GEMINI_MODEL,
     contents: prompt,
     config: {
       ...geminiThinkingMinimal,

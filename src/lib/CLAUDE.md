@@ -44,7 +44,7 @@ Google Generative AI integration for translation and metadata detection.
 
 - `initGemini(apiKey)` - Initialize the Gemini client
 - `isGeminiInitialized()` - Check if API key is configured
-- `translateParagraph(paragraph, prompt)` - Translate text using gemini-2.0-flash
+- `translateParagraph(paragraph, prompt)` - Translate text using gemini-3.5-flash
 - `detectBookMetadata(sample)` - AI-powered title/author detection for TXT files
 
 API key is user-provided and stored in localStorage (not .env).
