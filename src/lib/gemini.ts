@@ -7,7 +7,7 @@ import {
   type TranslationContext,
 } from "./autoTranslate"
 
-const DEFAULT_GEMINI_MODEL = "gemini-3.5-flash"
+const DEFAULT_GEMINI_MODEL = "gemini-3.7-flash"
 
 const geminiThinkingMinimal = {
   thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
