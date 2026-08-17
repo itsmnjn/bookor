@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { initGemini, isGeminiInitialized } from "../lib/gemini"
+import { initGemini, isGeminiInitialized, validateAndInitGemini } from "../lib/gemini"
 import { deleteCustomPreset, getAllPresets, getPresetById, saveCustomPreset, updateCustomPreset } from "../lib/presets"
 import type { TranslationPreset } from "../types/project"
 import { CloseIcon, PlusIcon, TrashIcon } from "./Icons"
@@ -15,6 +15,8 @@ const API_KEY_STORAGE = "bookor_gemini_key"
 export function SettingsPanel({ translationPrompt, onUpdatePrompt, onClose }: SettingsPanelProps) {
   const [apiKey, setApiKey] = useState("")
   const [isConnected, setIsConnected] = useState(isGeminiInitialized())
+  const [isTestingApiKey, setIsTestingApiKey] = useState(false)
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null)
   const [presets, setPresets] = useState<TranslationPreset[]>(getAllPresets())
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null)
   const [customPrompt, setCustomPrompt] = useState(translationPrompt ?? "")
@@ -47,11 +49,26 @@ export function SettingsPanel({ translationPrompt, onUpdatePrompt, onClose }: Se
     }
   }, [])
 
-  const handleSaveApiKey = () => {
-    if (apiKey.trim()) {
-      localStorage.setItem(API_KEY_STORAGE, apiKey.trim())
-      initGemini(apiKey.trim())
+  const handleSaveApiKey = async () => {
+    const trimmedApiKey = apiKey.trim()
+    if (!trimmedApiKey) return
+
+    setIsTestingApiKey(true)
+    setApiKeyError(null)
+
+    try {
+      await validateAndInitGemini(trimmedApiKey)
+      localStorage.setItem(API_KEY_STORAGE, trimmedApiKey)
+      setApiKey(trimmedApiKey)
       setIsConnected(true)
+    } catch (error) {
+      console.error("Gemini API key validation failed:", error)
+      setIsConnected(false)
+      setApiKeyError(
+        "Could not connect to Gemini. Check the key, its permissions, and your connection, then try again.",
+      )
+    } finally {
+      setIsTestingApiKey(false)
     }
   }
 
@@ -135,11 +152,20 @@ export function SettingsPanel({ translationPrompt, onUpdatePrompt, onClose }: Se
                 type="password"
                 className="form-input"
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={(e) => {
+                  setApiKey(e.target.value)
+                  setIsConnected(false)
+                  setApiKeyError(null)
+                }}
                 placeholder="Enter your API key"
+                disabled={isTestingApiKey}
               />
-              <button className="btn btn--secondary" onClick={handleSaveApiKey}>
-                Save
+              <button
+                className="btn btn--secondary"
+                onClick={handleSaveApiKey}
+                disabled={!apiKey.trim() || isTestingApiKey}
+              >
+                {isTestingApiKey ? "Testing..." : "Save"}
               </button>
             </div>
             <div className="api-status">
@@ -148,8 +174,9 @@ export function SettingsPanel({ translationPrompt, onUpdatePrompt, onClose }: Se
                   isConnected ? "api-status__dot--connected" : "api-status__dot--disconnected"
                 }`}
               />
-              <span>{isConnected ? "Connected" : "Not connected"}</span>
+              <span>{isTestingApiKey ? "Testing connection..." : isConnected ? "Connected" : "Not connected"}</span>
             </div>
+            {apiKeyError && <p className="form-error">{apiKeyError}</p>}
             <p className="form-hint">
               Get your API key from{" "}
               <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">

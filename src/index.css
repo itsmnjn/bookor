@@ -1465,6 +1465,12 @@ body::before {
   margin-top: var(--space-sm);
 }
 
+.api-key-input + .api-status + .form-error {
+  margin-top: var(--space-xs);
+  color: var(--color-error, #dc3545);
+  font-size: 0.75rem;
+}
+
 .api-status__dot {
   width: 8px;
   height: 8px;

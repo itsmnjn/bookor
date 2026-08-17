@@ -43,6 +43,7 @@ Presets define translation style prompts (e.g., formal, casual, literary).
 Google Generative AI integration for translation and metadata detection.
 
 - `initGemini(apiKey)` - Initialize the Gemini client
+- `validateAndInitGemini(apiKey)` - Test an API key with a minimal Gemini request, then initialize the client
 - `isGeminiInitialized()` - Check if API key is configured
 - `translateParagraph(paragraph, prompt)` - Translate text using gemini-3.7-flash
 - `detectBookMetadata(sample)` - AI-powered title/author detection for TXT files

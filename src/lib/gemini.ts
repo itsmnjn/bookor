@@ -1,4 +1,4 @@
-import { GoogleGenAI, ThinkingLevel } from "@google/genai"
+import { GoogleGenAI } from "@google/genai"
 import type { Paragraph, ParagraphLocator, Project } from "../types/project"
 import {
   buildTranslationContext,
@@ -8,10 +8,6 @@ import {
 } from "./autoTranslate"
 
 const DEFAULT_GEMINI_MODEL = "gemini-3.7-flash"
-
-const geminiThinkingMinimal = {
-  thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
-}
 
 let client: GoogleGenAI | null = null
 
@@ -43,6 +39,21 @@ export function initGemini(apiKey: string): void {
   client = new GoogleGenAI({ apiKey })
 }
 
+export async function validateAndInitGemini(apiKey: string): Promise<void> {
+  const candidate = new GoogleGenAI({ apiKey })
+
+  const result = await candidate.models.generateContent({
+    model: DEFAULT_GEMINI_MODEL,
+    contents: "Reply with exactly OK.",
+  })
+
+  if (!result.text?.trim()) {
+    throw new Error("Gemini returned an empty response.")
+  }
+
+  client = candidate
+}
+
 export function isGeminiInitialized(): boolean {
   return client !== null
 }
@@ -62,7 +73,6 @@ export async function translateParagraph(
     model: DEFAULT_GEMINI_MODEL,
     contents: fullPrompt,
     config: {
-      ...geminiThinkingMinimal,
       abortSignal: options.signal,
       temperature: 0.3, // Lower temperature for more consistent translations
       maxOutputTokens: 8192,
@@ -280,7 +290,6 @@ ${textSample}`
     model: DEFAULT_GEMINI_MODEL,
     contents: prompt,
     config: {
-      ...geminiThinkingMinimal,
       temperature: 0.1,
       maxOutputTokens: 256,
     },
