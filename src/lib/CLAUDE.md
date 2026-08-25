@@ -5,7 +5,7 @@ Utility modules for data handling and external integrations.
 ## Modules
 
 ### storage.ts
-LocalStorage wrapper for project persistence.
+IndexedDB-backed project persistence with synchronous in-memory reads after startup.
 
 Functions:
 - `getProjects()` - Returns all ProjectSummary items
@@ -13,6 +13,9 @@ Functions:
 - `saveProject(project)` - Saves/updates a Project
 - `deleteProject(id)` - Removes a Project
 - `getCurrentProjectId()` / `setCurrentProjectId(id)` - Track last opened project
+
+### database.ts
+Shared IndexedDB request/transaction helpers for projects and custom presets.
 
 ### parser.ts
 Unified book parser with smart paragraph grouping.
@@ -34,6 +37,7 @@ EPUB structure: container.xml → content.opf → spine order → XHTML chapters
 ### presets.ts
 Translation preset definitions.
 
+- `initializePresets()` - Loads and migrates custom presets into IndexedDB
 - `getAllPresets()` - Returns built-in translation presets
 - `getDefaultPreset()` - Returns the default preset
 

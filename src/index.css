@@ -1538,6 +1538,20 @@ body::before {
   white-space: nowrap;
 }
 
+.preset-btn--group {
+  gap: 0;
+  padding: 0;
+}
+
+.preset-btn__select {
+  padding: var(--space-sm) 0 var(--space-sm) var(--space-md);
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
 .preset-btn__delete {
   display: flex;
   align-items: center;
@@ -1546,12 +1560,25 @@ body::before {
   height: 18px;
   padding: 0;
   margin-left: var(--space-xs);
+  margin-right: var(--space-sm);
   background: transparent;
   border: none;
   border-radius: 2px;
   cursor: pointer;
   color: var(--text-muted);
   transition: all var(--transition-fast);
+}
+
+.app-message {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: var(--space-xl);
+  color: var(--text-secondary);
+}
+
+.app-message--error {
+  color: var(--color-error, #dc3545);
 }
 
 .preset-btn__delete:hover {

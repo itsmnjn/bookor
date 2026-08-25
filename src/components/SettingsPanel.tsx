@@ -190,25 +190,38 @@ export function SettingsPanel({ translationPrompt, onUpdatePrompt, onClose }: Se
               <h3 className="settings-section__title">Translation Preset</h3>
               <div className="preset-selector">
                 {presets.map((preset) => (
-                  <button
-                    key={preset.id}
-                    className={`preset-btn ${selectedPresetId === preset.id ? "preset-btn--active" : ""}`}
-                    onClick={() => handleSelectPreset(preset.id)}
-                  >
-                    <span className="preset-btn__name">{preset.name}</span>
-                    {!preset.isBuiltIn && (
+                  preset.isBuiltIn
+                    ? (
                       <button
-                        className="preset-btn__delete"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleDeletePreset(preset.id)
-                        }}
-                        aria-label={`Delete ${preset.name}`}
+                        key={preset.id}
+                        className={`preset-btn ${selectedPresetId === preset.id ? "preset-btn--active" : ""}`}
+                        onClick={() => handleSelectPreset(preset.id)}
                       >
-                        <TrashIcon className="icon" />
+                        <span className="preset-btn__name">{preset.name}</span>
                       </button>
-                    )}
-                  </button>
+                    )
+                    : (
+                      <div
+                        key={preset.id}
+                        className={`preset-btn preset-btn--group ${
+                          selectedPresetId === preset.id ? "preset-btn--active" : ""
+                        }`}
+                      >
+                        <button
+                          className="preset-btn__select"
+                          onClick={() => handleSelectPreset(preset.id)}
+                        >
+                          <span className="preset-btn__name">{preset.name}</span>
+                        </button>
+                        <button
+                          className="preset-btn__delete"
+                          onClick={() => handleDeletePreset(preset.id)}
+                          aria-label={`Delete ${preset.name}`}
+                        >
+                          <TrashIcon className="icon" />
+                        </button>
+                      </div>
+                    )
                 ))}
                 <button
                   className="preset-btn preset-btn--add"

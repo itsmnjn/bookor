@@ -22,14 +22,15 @@ App.tsx holds top-level state and passes callbacks to children:
 
 1. User actions trigger callbacks passed from App.tsx
 2. State updates in App.tsx
-3. Changes persist to localStorage via `lib/storage.ts`
+3. Book and preset changes persist to IndexedDB via `lib/database.ts`
 4. UI re-renders with new state
 
 ## localStorage Keys
 
-- `bookor_projects` - JSON array of all projects
 - `bookor_current_project` - ID of last opened project
 - `bookor_gemini_key` - User's Gemini API key
+
+Legacy `bookor_projects` and `bookor_custom_presets` data is migrated to IndexedDB on startup.
 
 ## Styling (index.css)
 

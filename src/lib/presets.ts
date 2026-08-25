@@ -1,6 +1,38 @@
 import type { KoreanEndingStyle, TranslationPreset } from "../types/project"
+import { CUSTOM_PRESETS_STORE, deleteRecord, getAllRecords, putRecords } from "./database"
 
 const CUSTOM_PRESETS_STORAGE = "bookor_custom_presets"
+
+let customPresets: TranslationPreset[] = []
+let initializationPromise: Promise<void> | null = null
+
+export function initializePresets(): Promise<void> {
+  if (initializationPromise) return initializationPromise
+
+  initializationPromise = (async () => {
+    const indexedPresets = await getAllRecords<TranslationPreset>(CUSTOM_PRESETS_STORE)
+    const presetsById = new Map(indexedPresets.map((preset) => [preset.id, preset]))
+    const legacyData = localStorage.getItem(CUSTOM_PRESETS_STORAGE)
+
+    if (legacyData) {
+      const legacyPresets = parseStoredPresets(legacyData)
+      const presetsToMigrate: TranslationPreset[] = []
+
+      for (const legacyPreset of legacyPresets) {
+        if (presetsById.has(legacyPreset.id)) continue
+        presetsById.set(legacyPreset.id, legacyPreset)
+        presetsToMigrate.push(legacyPreset)
+      }
+
+      await putRecords(CUSTOM_PRESETS_STORE, presetsToMigrate)
+      localStorage.removeItem(CUSTOM_PRESETS_STORAGE)
+    }
+
+    customPresets = [...presetsById.values()]
+  })()
+
+  return initializationPromise
+}
 
 // Korean sentence ending styles
 export const KOREAN_ENDING_STYLES: { value: KoreanEndingStyle; label: string; example: string; description: string }[] =
@@ -69,13 +101,7 @@ export function getBuiltInPresets(): TranslationPreset[] {
 }
 
 export function getCustomPresets(): TranslationPreset[] {
-  const stored = localStorage.getItem(CUSTOM_PRESETS_STORAGE)
-  if (!stored) return []
-  try {
-    return JSON.parse(stored) as TranslationPreset[]
-  } catch {
-    return []
-  }
+  return customPresets
 }
 
 export function getAllPresets(): TranslationPreset[] {
@@ -93,13 +119,14 @@ export function getDefaultPreset(): TranslationPreset {
 export function saveCustomPreset(preset: Omit<TranslationPreset, "id" | "isBuiltIn">): TranslationPreset {
   const newPreset: TranslationPreset = {
     ...preset,
-    id: `custom-${Date.now()}`,
+    id: `custom-${crypto.randomUUID()}`,
     isBuiltIn: false,
   }
 
-  const customPresets = getCustomPresets()
-  customPresets.push(newPreset)
-  localStorage.setItem(CUSTOM_PRESETS_STORAGE, JSON.stringify(customPresets))
+  customPresets = [...customPresets, newPreset]
+  void putRecords(CUSTOM_PRESETS_STORE, [newPreset]).catch((error) => {
+    console.error("Failed to persist custom preset:", error)
+  })
 
   return newPreset
 }
@@ -109,7 +136,7 @@ export function updateCustomPreset(
   updates: Partial<Omit<TranslationPreset, "id" | "isBuiltIn">>,
 ): TranslationPreset | null {
   let updatedPreset: TranslationPreset | null = null
-  const customPresets = getCustomPresets().map((preset) => {
+  customPresets = customPresets.map((preset) => {
     if (preset.id !== id) return preset
     updatedPreset = {
       ...preset,
@@ -122,13 +149,25 @@ export function updateCustomPreset(
 
   if (!updatedPreset) return null
 
-  localStorage.setItem(CUSTOM_PRESETS_STORAGE, JSON.stringify(customPresets))
+  void putRecords(CUSTOM_PRESETS_STORE, [updatedPreset]).catch((error) => {
+    console.error("Failed to persist custom preset:", error)
+  })
   return updatedPreset
 }
 
 export function deleteCustomPreset(id: string): void {
-  const customPresets = getCustomPresets().filter((p) => p.id !== id)
-  localStorage.setItem(CUSTOM_PRESETS_STORAGE, JSON.stringify(customPresets))
+  customPresets = customPresets.filter((p) => p.id !== id)
+  void deleteRecord(CUSTOM_PRESETS_STORE, id).catch((error) => {
+    console.error("Failed to delete custom preset:", error)
+  })
+}
+
+function parseStoredPresets(stored: string): TranslationPreset[] {
+  try {
+    return JSON.parse(stored) as TranslationPreset[]
+  } catch {
+    return []
+  }
 }
 
 // Check if a preset is Korean-to-Korean (needs ending style)
