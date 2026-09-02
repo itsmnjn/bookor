@@ -7,7 +7,7 @@ import {
   type TranslationContext,
 } from "./autoTranslate"
 
-const DEFAULT_GEMINI_MODEL = "gemini-3.7-flash"
+const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 
 let client: GoogleGenAI | null = null
 
