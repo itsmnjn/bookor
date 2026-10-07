@@ -74,7 +74,6 @@ export async function translateParagraph(
     contents: fullPrompt,
     config: {
       abortSignal: options.signal,
-      temperature: 0.3, // Lower temperature for more consistent translations
       maxOutputTokens: 8192,
     },
   })
@@ -290,7 +289,6 @@ ${textSample}`
     model: DEFAULT_GEMINI_MODEL,
     contents: prompt,
     config: {
-      temperature: 0.1,
       maxOutputTokens: 256,
     },
   })
